@@ -1,114 +1,146 @@
 /**
- * FrameStudio - Módulo de Atalhos de Teclado
- * Gerenciamento ergonômico de atalhos para edição ágil e precisa.
+ * FrameStudio - Gerenciador de Atalhos de Teclado (One-Hand Workflow)
  */
 
 class ShortcutsManager {
     constructor(app) {
         this.app = app;
-        this.modal = document.getElementById('shortcuts-modal');
-        this.btnOpen = document.getElementById('btn-shortcuts');
-        this.btnClose = document.getElementById('shortcuts-btn-close');
+        this.modalElement = document.getElementById('shortcuts-modal');
+        this.btnOpenModal = document.getElementById('btn-shortcuts-info');
+        this.btnCloseModal = document.getElementById('btn-close-shortcuts-modal');
 
-        this._initEvents();
+        this.init();
     }
 
-    _initEvents() {
-        if (this.btnOpen) {
-            this.btnOpen.addEventListener('click', () => this.openModal());
+    init() {
+        this.bindGlobalKeys();
+        this.bindModalEvents();
+    }
+
+    bindGlobalKeys() {
+        window.addEventListener('keydown', (e) => {
+            // Ignora se estiver digitando em um input ou select
+            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) {
+                return;
+            }
+
+            const key = e.key.toUpperCase();
+
+            // Play / Pause
+            if (e.code === 'Space' || key === 'K') {
+                e.preventDefault();
+                this.app.togglePlay();
+                return;
+            }
+
+            // Capturar Frame
+            if (key === 'C') {
+                e.preventDefault();
+                this.app.captureFrame();
+                return;
+            }
+
+            // Lupa de Inspeção de Foco
+            if (key === 'Z') {
+                e.preventDefault();
+                if (this.app.toggleLoupe) {
+                    this.app.toggleLoupe();
+                }
+                return;
+            }
+
+            // Marcar Início do Burst
+            if (key === 'I' || e.key === '[') {
+                e.preventDefault();
+                if (this.app.setBurstStartCurrent) {
+                    this.app.setBurstStartCurrent();
+                }
+                return;
+            }
+
+            // Marcar Fim do Burst
+            if (key === 'O' || e.key === ']') {
+                e.preventDefault();
+                if (this.app.setBurstEndCurrent) {
+                    this.app.setBurstEndCurrent();
+                }
+                return;
+            }
+
+            // Disparar Sequência (Burst)
+            if (key === 'B') {
+                e.preventDefault();
+                if (this.app.captureBurst) {
+                    this.app.captureBurst();
+                }
+                return;
+            }
+
+            // Navegação de Tempo (Frame a Frame e Segundos)
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    this.app.videoEngine.step(-1.0);
+                } else if (e.altKey) {
+                    this.app.videoEngine.step(-0.1);
+                } else {
+                    this.app.videoEngine.stepFrames(-1);
+                }
+                return;
+            }
+
+            if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    this.app.videoEngine.step(1.0);
+                } else if (e.altKey) {
+                    this.app.videoEngine.step(0.1);
+                } else {
+                    this.app.videoEngine.stepFrames(1);
+                }
+                return;
+            }
+
+            // Atalhos de Modal
+            if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+                e.preventDefault();
+                this.openModal();
+                return;
+            }
+
+            if (e.key === 'Escape') {
+                this.closeModal();
+            }
+        });
+    }
+
+    bindModalEvents() {
+        if (this.btnOpenModal) {
+            this.btnOpenModal.addEventListener('click', () => this.openModal());
         }
 
-        if (this.btnClose) {
-            this.btnClose.addEventListener('click', () => this.closeModal());
+        if (this.btnCloseModal) {
+            this.btnCloseModal.addEventListener('click', () => this.closeModal());
         }
 
-        if (this.modal) {
-            this.modal.addEventListener('click', (e) => {
-                if (e.target === this.modal) {
+        if (this.modalElement) {
+            this.modalElement.addEventListener('click', (e) => {
+                if (e.target === this.modalElement) {
                     this.closeModal();
                 }
             });
         }
-
-        window.addEventListener('keydown', (e) => this._handleKeyDown(e));
-    }
-
-    _handleKeyDown(e) {
-        // Ignora atalhos se o foco estiver em inputs/selects
-        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
-        if (activeTag === 'input' && document.activeElement.type !== 'range') return;
-        if (activeTag === 'textarea' || activeTag === 'select') return;
-
-        // Tecla ESC: Fechar qualquer modal aberto
-        if (e.key === 'Escape') {
-            this.closeModal();
-            if (this.app.gallery) {
-                this.app.gallery.closeModal();
-            }
-            return;
-        }
-
-        // Tecla ?: Abrir modal de atalhos
-        if (e.key === '?' || (e.shiftKey && e.key === '/')) {
-            e.preventDefault();
-            this.toggleModal();
-            return;
-        }
-
-        // Se o workspace não estiver visível (nenhum vídeo carregado), ignora atalhos de playback
-        if (!this.app.videoEngine || !this.app.videoEngine.isLoaded) return;
-
-        // Play / Pause (Espaço ou K)
-        if (e.code === 'Space' || e.key.toLowerCase() === 'k') {
-            e.preventDefault();
-            this.app.togglePlay();
-            return;
-        }
-
-        // Capturar Frame (Tecla C)
-        if (e.key.toLowerCase() === 'c') {
-            e.preventDefault();
-            this.app.captureFrame();
-            return;
-        }
-
-        // Navegação de Linha do Tempo (Setas Esquerda / Direita)
-        if (e.key === 'ArrowLeft') {
-            e.preventDefault();
-            if (e.shiftKey) {
-                this.app.videoEngine.step(-1); // -1s
-            } else if (e.altKey) {
-                this.app.videoEngine.step(-0.1); // -0.1s
-            } else {
-                this.app.videoEngine.stepFrames(-1); // -1 frame
-            }
-            return;
-        }
-
-        if (e.key === 'ArrowRight') {
-            e.preventDefault();
-            if (e.shiftKey) {
-                this.app.videoEngine.step(1); // +1s
-            } else if (e.altKey) {
-                this.app.videoEngine.step(0.1); // +0.1s
-            } else {
-                this.app.videoEngine.stepFrames(1); // +1 frame
-            }
-            return;
-        }
     }
 
     openModal() {
-        if (this.modal) this.modal.classList.remove('hidden');
+        if (this.modalElement) {
+            this.modalElement.classList.remove('hidden');
+        }
     }
 
     closeModal() {
-        if (this.modal) this.modal.classList.add('hidden');
-    }
-
-    toggleModal() {
-        if (this.modal) {
-            this.modal.classList.toggle('hidden');
+        if (this.modalElement) {
+            this.modalElement.classList.add('hidden');
         }
     }
 }

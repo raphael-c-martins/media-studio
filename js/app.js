@@ -73,6 +73,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const app = {
         gallery,
         togglePlay: () => togglePlayState(),
+        toggleLoupe: () => toggleLoupeState(),
+        setBurstStartCurrent: () => setBurstStartCurrent(),
+        setBurstEndCurrent: () => setBurstEndCurrent(),
+        captureBurst: () => executeBurstCapture(),
         captureFrame: () => captureCurrentFrame(),
         videoEngine: {
             isLoaded: true,
@@ -499,4 +503,193 @@ document.addEventListener('DOMContentLoaded', () => {
 
         Toast.success('Todos os frames sugeridos foram adicionados à galeria!');
     });
+}
+    // ==========================================
+    // Lupa de Inspeção de Foco (Pixel Peeping)
+    // ==========================================
+    const btnToggleLoupe = document.getElementById('btn-toggle-loupe');
+    const magnifierLens = document.getElementById('magnifier-lens');
+    const magnifierCanvas = document.getElementById('magnifier-canvas');
+    const magnifierZoomLevel = document.getElementById('magnifier-zoom-level');
+    let magnifierCtx = magnifierCanvas ? magnifierCanvas.getContext('2d') : null;
+    let isLoupeActive = false;
+    let loupeZoom = 2.5;
+
+    function toggleLoupeState() {
+        isLoupeActive = !isLoupeActive;
+        if (btnToggleLoupe) {
+            btnToggleLoupe.classList.toggle('active', isLoupeActive);
+        }
+        if (!isLoupeActive && magnifierLens) {
+            magnifierLens.classList.add('hidden');
+        }
+        Toast.info(isLoupeActive ? 'Lupa de Foco ativada (Passe o mouse na imagem)' : 'Lupa de Foco desativada');
+    }
+
+    if (btnToggleLoupe) {
+        btnToggleLoupe.addEventListener('click', toggleLoupeState);
+    }
+
+    if (playerFrameView && magnifierLens && magnifierCanvas) {
+        playerFrameView.addEventListener('mousemove', (e) => {
+            if (!isLoupeActive || playerFrameView.classList.contains('hidden')) return;
+
+            const rect = playerFrameView.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            if (mouseX < 0 || mouseX > rect.width || mouseY < 0 || mouseY > rect.height) {
+                magnifierLens.classList.add('hidden');
+                return;
+            }
+
+            magnifierLens.classList.remove('hidden');
+
+            const containerRect = playerFrameView.parentElement.getBoundingClientRect();
+            const lensX = e.clientX - containerRect.left;
+            const lensY = e.clientY - containerRect.top;
+
+            magnifierLens.style.left = `${lensX}px`;
+            magnifierLens.style.top = `${lensY}px`;
+
+            // Desenhar a área ampliada
+            const naturalW = playerFrameView.naturalWidth || rect.width;
+            const naturalH = playerFrameView.naturalHeight || rect.height;
+            const scaleX = naturalW / rect.width;
+            const scaleY = naturalH / rect.height;
+
+            const sourceCenterX = mouseX * scaleX;
+            const sourceCenterY = mouseY * scaleY;
+
+            const lensW = magnifierCanvas.width;
+            const lensH = magnifierCanvas.height;
+            const sampleW = lensW / loupeZoom;
+            const sampleH = lensH / loupeZoom;
+
+            const sx = Math.max(0, Math.min(naturalW - sampleW, sourceCenterX - sampleW / 2));
+            const sy = Math.max(0, Math.min(naturalH - sampleH, sourceCenterY - sampleH / 2));
+
+            magnifierCtx.imageSmoothingEnabled = false; // Máxima nitidez
+            magnifierCtx.clearRect(0, 0, lensW, lensH);
+            magnifierCtx.drawImage(playerFrameView, sx, sy, sampleW, sampleH, 0, 0, lensW, lensH);
+        });
+
+        playerFrameView.addEventListener('mouseleave', () => {
+            if (magnifierLens) magnifierLens.classList.add('hidden');
+        });
+
+        // Alternar zoom com scroll do mouse
+        playerFrameView.addEventListener('wheel', (e) => {
+            if (!isLoupeActive) return;
+            e.preventDefault();
+            if (e.deltaY < 0) {
+                loupeZoom = Math.min(6.0, loupeZoom + 0.5);
+            } else {
+                loupeZoom = Math.max(1.5, loupeZoom - 0.5);
+            }
+            if (magnifierZoomLevel) {
+                magnifierZoomLevel.textContent = `${loupeZoom.toFixed(1)}x`;
+            }
+        });
+    }
+
+    // ==========================================
+    // Captura de Sequência (Burst / Carrossel)
+    // ==========================================
+    const burstStartDisplay = document.getElementById('burst-start-display');
+    const burstEndDisplay = document.getElementById('burst-end-display');
+    const btnSetBurstStart = document.getElementById('btn-set-burst-start');
+    const btnSetBurstEnd = document.getElementById('btn-set-burst-end');
+    const selectBurstCount = document.getElementById('select-burst-count');
+    const btnCaptureBurst = document.getElementById('btn-capture-burst');
+
+    let burstStartTime = 0;
+    let burstEndTime = 0;
+
+    function formatShortTime(t) {
+        const mins = Math.floor(t / 60);
+        const secs = Math.floor(t % 60);
+        const dec = Math.floor((t % 1) * 10);
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${dec}s`;
+    }
+
+    function setBurstStartCurrent() {
+        burstStartTime = currentTime;
+        if (burstEndTime < burstStartTime) {
+            burstEndTime = Math.min(currentDuration, burstStartTime + 2.0);
+            if (burstEndDisplay) burstEndDisplay.textContent = formatShortTime(burstEndTime);
+        }
+        if (burstStartDisplay) burstStartDisplay.textContent = formatShortTime(burstStartTime);
+        Toast.info(`Ponto A (Início) definido em ${formatShortTime(burstStartTime)}`);
+    }
+
+    function setBurstEndCurrent() {
+        if (currentTime <= burstStartTime) {
+            Toast.warning('O Ponto B (Fim) deve ser maior que o Ponto A (Início).');
+            return;
+        }
+        burstEndTime = currentTime;
+        if (burstEndDisplay) burstEndDisplay.textContent = formatShortTime(burstEndTime);
+        Toast.info(`Ponto B (Fim) definido em ${formatShortTime(burstEndTime)}`);
+    }
+
+    if (btnSetBurstStart) btnSetBurstStart.addEventListener('click', setBurstStartCurrent);
+    if (btnSetBurstEnd) btnSetBurstEnd.addEventListener('click', setBurstEndCurrent);
+
+    async function executeBurstCapture() {
+        if (!currentVideoId) {
+            Toast.warning('Carregue um vídeo antes de extrair uma sequência.');
+            return;
+        }
+
+        if (burstEndTime <= burstStartTime) {
+            burstEndTime = Math.min(currentDuration, burstStartTime + 2.0);
+            if (burstEndDisplay) burstEndDisplay.textContent = formatShortTime(burstEndTime);
+        }
+
+        const count = parseInt(selectBurstCount ? selectBurstCount.value : '6', 10);
+        const format = selectFormat ? selectFormat.value.split('/')[1] : 'jpeg';
+        const aspectRatio = selectAspectRatio ? selectAspectRatio.value : 'original';
+
+        Toast.info(`Extraindo sequência de ${count} fotos em alta resolução...`);
+        btnCaptureBurst.disabled = true;
+
+        try {
+            const url = `/api/burst?video_id=${currentVideoId}&start_time=${burstStartTime}&end_time=${burstEndTime}&count=${count}&format=${format}&aspect_ratio=${aspectRatio}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Falha ao processar sequência no servidor.');
+
+            const data = await response.json();
+            const frames = data.frames || [];
+
+            if (frames.length === 0) {
+                Toast.warning('Nenhum frame retornado na sequência.');
+                return;
+            }
+
+            for (const f of frames) {
+                gallery.addFrame({
+                    dataUrl: f.dataUrl,
+                    time: f.time,
+                    timeFormatted: f.timeFormatted,
+                    width: f.width,
+                    height: f.height,
+                    format: format,
+                    aspectRatio: aspectRatio
+                });
+            }
+
+            Toast.success(`${frames.length} fotos da sequência adicionadas à Galeria!`);
+        } catch (err) {
+            console.error('Erro no burst:', err);
+            Toast.error('Erro ao capturar sequência de frames.');
+        } finally {
+            btnCaptureBurst.disabled = false;
+        }
+    }
+
+    if (btnCaptureBurst) {
+        btnCaptureBurst.addEventListener('click', executeBurstCapture);
+    }
+
 });

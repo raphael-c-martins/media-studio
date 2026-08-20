@@ -48,6 +48,8 @@ O FrameStudio resolve tudo isso **diretamente no seu computador**, com motor C++
 
 ## ✨ Funcionalidades Principais
 
+- **Lupa de Inspeção de Foco (Pixel Peeping):** Lente de aumento (2x a 6x) com mira central e controle via scroll do mouse para inspecionar nitidez de detalhes antes de capturar.
+- **Captura de Sequência / Burst:** Marque ponto A e ponto B na timeline e extraia uma sequência contínua de fotos para carrosséis do Instagram com 1 clique.
 - **Sugestão Automática de Melhores Momentos:** Grade com 12 miniaturas geradas em frações de segundo para encontrar os melhores ângulos do carro.
 - **Controle Frame a Frame de Alta Precisão:**
   - Avanço e recuo de 1 frame exato (`+1F` / `-1F`).
@@ -84,6 +86,10 @@ Dê um duplo clique no arquivo `iniciar.bat`.
 | :--- | :--- |
 | <kbd>Espaço</kbd> ou <kbd>K</kbd> | Play / Pausar Vídeo |
 | <kbd>C</kbd> | **Capturar Frame Atual para a Galeria** |
+| <kbd>Z</kbd> | **Ativar / Desativar Lupa de Foco** |
+| <kbd>I</kbd> | **Marcar Ponto A (Início do Burst)** |
+| <kbd>O</kbd> | **Marcar Ponto B (Fim do Burst)** |
+| <kbd>B</kbd> | **Disparar Captura de Sequência (Burst)** |
 | <kbd>→</kbd> | Avançar 1 Frame Exato |
 | <kbd>←</kbd> | Voltar 1 Frame Exato |
 | <kbd>Alt</kbd> + <kbd>→</kbd> | Avançar 0.1 Segundo |

@@ -108,10 +108,31 @@
                 <!-- Coluna Principal: Player & Timeline -->
                 <div class="player-column">
                     <!-- Container do Player de Vídeo -->
-                    <div class="player-container">
+                    <div class="player-container" id="player-container">
                         <video id="video-element" class="video-element" playsinline muted preload="auto"></video>
                         <img id="player-frame-view" class="video-element hidden" alt="Frame View">
                         <div id="crop-overlay-guide" class="crop-overlay-guide hidden"></div>
+                        
+                        <!-- Lupa de Inspeção de Foco (Pixel Peeping) -->
+                        <div id="magnifier-lens" class="magnifier-lens hidden">
+                            <canvas id="magnifier-canvas" width="180" height="180"></canvas>
+                            <div class="magnifier-crosshair"></div>
+                            <span id="magnifier-zoom-level" class="magnifier-zoom-level">2.5x</span>
+                        </div>
+
+                        <!-- Botão Flutuante de Lupa no Player -->
+                        <div class="player-floating-tools">
+                            <button id="btn-toggle-loupe" class="btn-player-tool" title="Lupa de Inspeção de Foco (Atalho: Z)">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                    <line x1="11" y1="8" x2="11" y2="14"></line>
+                                    <line x1="8" y1="11" x2="14" y2="11"></line>
+                                </svg>
+                                <span>Lupa [Z]</span>
+                            </button>
+                        </div>
+
                         <div id="video-play-overlay" class="video-play-overlay">
                             <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
                                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -246,6 +267,63 @@
                     </div>
 
                     <!-- Card de Amostragem Automática -->
+                                        <!-- Card de Captura de Sequência (Burst / Carrossel) -->
+                    <div class="panel-card burst-card">
+                        <h3 class="panel-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+                                <line x1="7" y1="2" x2="7" y2="22"></line>
+                                <line x1="17" y1="2" x2="17" y2="22"></line>
+                                <line x1="2" y1="12" x2="22" y2="12"></line>
+                                <line x1="2" y1="7" x2="7" y2="7"></line>
+                                <line x1="2" y1="17" x2="7" y2="17"></line>
+                                <line x1="17" y1="17" x2="22" y2="17"></line>
+                                <line x1="17" y1="7" x2="22" y2="7"></line>
+                            </svg>
+                            Sequência / Burst
+                            <span class="badge-pro">Carrossel</span>
+                        </h3>
+                        <p class="panel-desc">Defina um intervalo de tempo para extrair uma rajada contínua de fotos para carrosséis do Instagram.</p>
+
+                        <div class="burst-points-grid">
+                            <div class="burst-point-box">
+                                <span class="burst-point-label">Ponto A (Início):</span>
+                                <div class="burst-point-ctrl">
+                                    <span id="burst-start-display" class="burst-time-val">00:00.0s</span>
+                                    <button id="btn-set-burst-start" class="btn btn-sm btn-outline" title="Marcar ponto atual como Início (Atalho: I)">Set [I]</button>
+                                </div>
+                            </div>
+                            <div class="burst-point-box">
+                                <span class="burst-point-label">Ponto B (Fim):</span>
+                                <div class="burst-point-ctrl">
+                                    <span id="burst-end-display" class="burst-time-val">00:00.0s</span>
+                                    <button id="btn-set-burst-end" class="btn btn-sm btn-outline" title="Marcar ponto atual como Fim (Atalho: O)">Set [O]</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-inline" style="margin-top: 0.5rem;">
+                            <label for="select-burst-count" class="form-label-inline">Fotos na Sequência:</label>
+                            <select id="select-burst-count" class="select-input-sm">
+                                <option value="4">4 Fotos</option>
+                                <option value="6" selected>6 Fotos</option>
+                                <option value="8">8 Fotos</option>
+                                <option value="10">10 Fotos</option>
+                                <option value="12">12 Fotos</option>
+                            </select>
+                        </div>
+
+                        <button id="btn-capture-burst" class="btn btn-primary btn-block" style="margin-top: 0.5rem;" title="Extrair rajada de fotos (Atalho: B)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                            <span>Capturar Sequência (Burst)</span>
+                            <kbd class="kbd-badge">B</kbd>
+                        </button>
+                    </div>
+
                     <div class="panel-card auto-sample-card">
                         <h3 class="panel-title">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

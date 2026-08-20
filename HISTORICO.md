@@ -11,6 +11,18 @@ Este documento registra a evolução técnica, decisões arquiteturais e notas d
 
 ## Linha do Tempo de Atualizações
 
+### 🚀 [2026-08-20] - Lupa de Inspeção de Foco e Captura de Sequência Burst (v1.4.0)
+
+- **Lupa de Inspeção de Foco (Pixel Peeping):**
+  1. **Lente de Alta Precisão:** Visualizador circular sobre o player com mira central e ampliação de 2x a 6x via scroll do mouse.
+  2. **Nitidez Extrema:** Desativação de interpolação bilinear (`imageSmoothingEnabled = false`) para inspeção de pixels reais de faróis, rodas e reflexos.
+  3. **Ativação Rápida:** Botão flutuante no player e atalho global <kbd>Z</kbd>.
+
+- **Captura de Sequência / Burst (Carrossel para Redes Sociais):**
+  1. **Marcação de Intervalo A/B:** Seleção instantânea de Ponto A (<kbd>I</kbd>) e Ponto B (<kbd>O</kbd>) na timeline.
+  2. **Endpoint `/api/burst`:** Extração assíncrona de 4 a 12 fotos uniformemente distribuídas no trecho, com resolução 4K nativa.
+  3. **Injeção Automática na Galeria:** Adição de todos os quadros da sequência à galeria com 1 clique ou atalho <kbd>B</kbd>.
+
 ### 🚀 [2026-08-20] - Criação e Lançamento do FrameStudio (v1.0.0)
 
 - **Contexto e Desafio:**

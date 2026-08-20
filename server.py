@@ -363,6 +363,76 @@ async def get_samples(video_id: str = Query(...), count: int = Query(12)):
 
     return {"samples": samples}
 
+@app.get("/api/burst")
+async def extract_burst_frames(
+    video_id: str = Query(...),
+    start_time: float = Query(0.0),
+    end_time: float = Query(0.0),
+    count: int = Query(6),
+    format: str = Query("jpeg"),
+    aspect_ratio: str = Query("original")
+):
+    """Extrai uma sequencia de N frames de alta resolucao no intervalo de tempo especificado."""
+    meta = VIDEO_REGISTRY.get(video_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Video nao encontrado.")
+
+    video_path = meta["path"]
+    rotation = meta["rotation"]
+    duration = meta["duration"]
+
+    if start_time < 0:
+        start_time = 0.0
+    if end_time <= start_time or end_time > duration:
+        end_time = duration
+
+    if count < 2:
+        count = 2
+    if count > 30:
+        count = 30
+
+    timestamps = [start_time + i * (end_time - start_time) / (count - 1) for i in range(count)]
+    burst_results = []
+    import base64
+
+    for t in timestamps:
+        try:
+            cap = cv2.VideoCapture(video_path)
+            cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000.0)
+            ret, frame = cap.read()
+            cap.release()
+
+            if ret and frame is not None:
+                frame = correct_frame_orientation(frame, rotation)
+                frame = apply_aspect_ratio_crop(frame, aspect_ratio)
+                h, w = frame.shape[:2]
+
+                if format.lower() == "png":
+                    _, enc = cv2.imencode(".png", frame, [cv2.IMWRITE_PNG_COMPRESSION, 3])
+                    mime = "image/png"
+                else:
+                    _, enc = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                    mime = "image/jpeg"
+
+                b64 = base64.b64encode(enc.tobytes()).decode("utf-8")
+                data_url = f"data:{mime};base64,{b64}"
+
+                seconds = int(t % 60)
+                millis = int((t % 1) * 10)
+                formatted = f"{seconds:02d}.{millis}s"
+
+                burst_results.append({
+                    "time": round(t, 3),
+                    "timeFormatted": formatted,
+                    "dataUrl": data_url,
+                    "width": w,
+                    "height": h
+                })
+        except Exception as err:
+            print(f"[AVISO] Falha ao extrair frame no burst ({t}s): {err}")
+
+    return {"frames": burst_results}
+
 # Servir Frontend
 STATIC_DIR = os.path.dirname(os.path.abspath(__file__))
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
