@@ -11,6 +11,17 @@ Este documento registra a evolução técnica, decisões arquiteturais e notas d
 
 ## Linha do Tempo de Atualizações
 
+### 🚀 [2026-08-20] - Sistema de Logs Robusto, Health Check e Correção de Upload (v1.4.1)
+
+- **Correção de Inicialização e Upload:**
+  - **Remoção de SyntaxError no JS:** Corrigido bloco duplicado de fechamento no `js/app.js` que impedia o registro dos ouvintes de eventos `drop` e `change` do input de vídeo.
+  - **Validação com Node.js:** Todos os 6 scripts JS foram auditados e validados via `node -c`.
+
+- **Observabilidade, Logs e Alta Disponibilidade (HA):**
+  - **RotatingFileHandler:** Implementado sistema de logs com rotação automática em `logs/servidor.log` (arquivos de até 5MB com 3 backups e encoding UTF-8).
+  - **Middleware de Auditoria:** Rastreamento automático de todas as requisições `/api/` com método, status code e tempo de processamento em milissegundos (`ms`).
+  - **Endpoint de Monitoramento (`/api/health`):** Rota de health check para verificação de status e contagem de vídeos ativos no registro em memória.
+
 ### 🚀 [2026-08-20] - Lupa de Inspeção de Foco e Captura de Sequência Burst (v1.4.0)
 
 - **Lupa de Inspeção de Foco (Pixel Peeping):**

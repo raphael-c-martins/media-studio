@@ -503,7 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         Toast.success('Todos os frames sugeridos foram adicionados à galeria!');
     });
-}
+
     // ==========================================
     // Lupa de Inspeção de Foco (Pixel Peeping)
     // ==========================================

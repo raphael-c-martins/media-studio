@@ -1,17 +1,62 @@
 import os
 import io
+import time
+import logging
+from logging.handlers import RotatingFileHandler
 import cv2
 import av
 import tempfile
 import threading
 from typing import Optional, List, Dict
-from fastapi import FastAPI, File, UploadFile, Query, HTTPException, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, Query, HTTPException, BackgroundTasks, Request
 from fastapi.responses import Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-app = FastAPI(title="FrameStudio Engine", version="1.2.0")
+# Configuração Robusta de Logs Persistentes
+LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+log_file_path = os.path.join(LOGS_DIR, "servidor.log")
+
+logger = logging.getLogger("FrameStudio")
+logger.setLevel(logging.INFO)
+
+# Formatação limpa de logs
+formatter = logging.Formatter(
+    fmt="[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+# Handler de arquivo com rotação (5MB max, 3 backups)
+if not logger.handlers:
+    file_handler = RotatingFileHandler(log_file_path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+logger.info("Iniciando FrameStudio Engine com sistema de logs robusto.")
+
+app = FastAPI(title="FrameStudio Engine", version="1.4.0")
+
+@app.middleware("http")
+async def log_requests_middleware(request: Request, call_next):
+    start_time = time.time()
+    try:
+        response = await call_next(request)
+        process_time = (time.time() - start_time) * 1000
+        # Loga apenas rotas de API para nao poluir com assets estaticos normais
+        if request.url.path.startswith("/api/"):
+            logger.info(f"{request.method} {request.url.path} -> {response.status_code} ({process_time:.1f}ms)")
+        return response
+    except Exception as e:
+        process_time = (time.time() - start_time) * 1000
+        logger.error(f"FALHA {request.method} {request.url.path} após {process_time:.1f}ms: {str(e)}", exc_info=True)
+        raise e
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -432,6 +477,16 @@ async def extract_burst_frames(
             print(f"[AVISO] Falha ao extrair frame no burst ({t}s): {err}")
 
     return {"frames": burst_results}
+
+@app.get("/api/health")
+async def health_check():
+    """Health Check para monitoramento e alta disponibilidade (HA)."""
+    return {
+        "status": "healthy",
+        "service": "FrameStudio Engine",
+        "version": "1.4.1",
+        "active_videos": len(VIDEO_REGISTRY)
+    }
 
 # Servir Frontend
 STATIC_DIR = os.path.dirname(os.path.abspath(__file__))
