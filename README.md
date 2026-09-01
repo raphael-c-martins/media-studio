@@ -6,13 +6,15 @@ Aplicativo moderno, assíncrono e de alta densidade para download e processament
 
 ## ✨ Funcionalidades (Features)
 
-- **Extração Universal de Mídias:** Compatível com YouTube, Instagram (Reels, Posts, Carrossel), Twitter/X, TikTok, Reddit, Facebook, Twitch e mais de 1.800 plataformas.
-- **Inspeção Prévia de URL:** Obtenha título, autor, miniatura, duração e lista de resoluções disponíveis antes de iniciar o download.
+- **Extração Universal de Mídias:** Compatível com YouTube, Instagram (Reels, Posts, Carrossel), Twitter/X, TikTok, Reddit, Facebook, Twitch e mais de 1.800 plataformas via yt-dlp.
+- **Carrossel Interativo com Preview em Vídeo:** Inspecione todas as fotos e vídeos de um post do Instagram em grade moderna, com reprodutor nativo de vídeo integrado para assistir antes de baixar.
+- **Download Flexível (Avulso ou Compactado em .ZIP):** Baixe uma mídia individual solta em milissegundos via CDN, ou selecione múltiplas mídias para empacotamento automático em arquivo `.ZIP`.
 - **Seleção Granular de Formato:** Opções de melhor qualidade automática (*Best*), 4K, 1080p, 720p, 480p ou extração direta de áudio (MP3, M4A, Opus, WAV, FLAC).
 - **Corte de Vídeo por Intervalo (Time-Range):** Defina tempo inicial e final (ex: `00:00:10` a `00:01:30`) para baixar apenas o trecho desejado.
-- **Fila Assíncrona de Downloads:** Acompanhe em tempo real velocidade de transferência, porcentagem, tamanho do arquivo e tempo estimado (ETA) via Server-Sent Events (SSE).
-- **Histórico Persistente:** Armazenamento seguro em banco de dados SQLite com busca rápida, filtros e botão de abertura direta no Windows Explorer.
-- **Resumo Inteligente com IA (DeepSeek):** Integração com DeepSeek AI para transcrição estruturada, tópicos principais e insights de vídeos.
+- **Widget Flutuante de Downloads Ativos:** Acompanhamento discreto em tempo real no canto inferior direito com taxa de transferência, porcentagem e tempo restante (ETA), ocultando-se automaticamente ao finalizar.
+- **Sistema Multitemas (5 Paletas Visuais):** Alterne instantaneamente entre *Azul Noturno*, *Preto & Dourado (Gold Luxury)*, *Preto & Cinza (Dark Slate)*, *Claro Moderno* e *Claro Creme*.
+- **Portabilidade de Pastas:** Salve na pasta padrão `./downloads` do projeto ou aponte um diretório personalizado no Windows Explorer.
+- **Histórico Persistente:** Armazenamento seguro em SQLite com busca rápida, filtros e botão para abrir a pasta diretamente no Windows Explorer (`os.startfile`).
 - **Launcher Local Automatizado:** Inicialização rápida com controle de processos, gerenciamento de ambiente virtual e logs de execução.
 
 ---
