@@ -371,14 +371,56 @@ body {
 .pill-btn:hover {
   background-color: var(--bg-surface-hover);
   color: var(--text-primary);
-  border-color: var(--border-color-hover);
+  border-color: var(--border-focus);
+  transform: translateY(-1px);
+}
+
+.pill-btn:active {
+  transform: scale(0.97);
 }
 
 .pill-btn.active {
   background-color: var(--color-primary);
   color: #fff;
   border-color: var(--color-primary);
-  box-shadow: 0 0 14px rgba(14, 165, 233, 0.4);
+  box-shadow: 0 0 14px rgba(37, 99, 235, 0.4);
+}
+
+/* Cores de Marca Individuais nas Pills */
+.pill-btn[data-platform="youtube"].active {
+  background-color: #dc2626;
+  border-color: #ef4444;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.45);
+}
+
+.pill-btn[data-platform="instagram"].active {
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  border-color: #ec4899;
+  box-shadow: 0 0 14px rgba(236, 72, 153, 0.45);
+}
+
+.pill-btn[data-platform="twitter"].active {
+  background-color: #0284c7;
+  border-color: #38bdf8;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+}
+
+.pill-btn[data-platform="tiktok"].active {
+  background: linear-gradient(135deg, #0d9488 0%, #06b6d4 100%);
+  border-color: #22d3ee;
+  box-shadow: 0 0 14px rgba(6, 182, 212, 0.45);
+}
+
+/* Efeito de Pulso no Card de Busca */
+@keyframes searchPulseGlow {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.6); }
+  50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.2); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
+.search-card.highlight-pulse {
+  animation: searchPulseGlow 0.8s ease-out;
+  border-color: var(--color-primary);
 }
 
 /* Home Welcome Features Grid */
@@ -420,6 +462,10 @@ body {
   cursor: pointer;
   user-select: none;
   position: relative;
+}
+
+.clickable-card:active {
+  transform: scale(0.98);
 }
 
 .clickable-card:hover {

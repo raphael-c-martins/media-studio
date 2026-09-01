@@ -19,6 +19,7 @@ const state = {
 function initPlatformPills() {
   const pills = document.querySelectorAll('.pill-btn');
   const input = document.getElementById('url-input');
+  const searchCard = document.querySelector('.search-card');
 
   const placeholders = {
     auto: 'Cole a URL do vídeo/post ou digite @usuario para varrer perfil...',
@@ -28,6 +29,14 @@ function initPlatformPills() {
     tiktok: 'Cole a URL do vídeo ou digite @usuario do TikTok...'
   };
 
+  const platformNames = {
+    auto: 'Detecção Automática (+1800 sites)',
+    youtube: 'YouTube',
+    instagram: 'Instagram',
+    twitter: 'Twitter / X',
+    tiktok: 'TikTok'
+  };
+
   pills.forEach(pill => {
     pill.addEventListener('click', () => {
       pills.forEach(p => p.classList.remove('active'));
@@ -35,6 +44,13 @@ function initPlatformPills() {
       const plat = pill.getAttribute('data-platform');
       state.selectedPlatform = plat;
       input.placeholder = placeholders[plat] || placeholders.auto;
+      
+      if (searchCard) {
+        searchCard.classList.remove('highlight-pulse');
+        void searchCard.offsetWidth; // Trigger reflow
+        searchCard.classList.add('highlight-pulse');
+      }
+
       input.focus();
     });
   });
@@ -1284,6 +1300,13 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 function initClickableCards() {
   const cards = document.querySelectorAll('.clickable-card');
+  const platformFriendlyNames = {
+    youtube: 'YouTube',
+    instagram: 'Instagram',
+    twitter: 'Twitter / X',
+    tiktok: 'TikTok'
+  };
+
   cards.forEach(card => {
     card.addEventListener('click', () => {
       const action = card.getAttribute('data-action');
@@ -1292,10 +1315,14 @@ function initClickableCards() {
         const targetPill = document.querySelector(`.pill-btn[data-platform="${platform}"]`);
         if (targetPill) {
           targetPill.click();
-          const input = document.getElementById('url-input');
+        }
+        const input = document.getElementById('url-input');
+        if (input) {
           input.focus();
           document.getElementById('inspect-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
+        const name = platformFriendlyNames[platform] || 'Plataforma';
+        showToast(`Plataforma ${name} selecionada. Cole o link no campo acima.`, 'info', 2500);
       } else if (action === 'tab') {
         const tabId = card.getAttribute('data-tab');
         const targetTab = document.getElementById(tabId);
