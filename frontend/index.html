@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediaDownloader Pro — Baixador Universal de Mídias</title>
+  <meta name="description" content="Baixador assíncrono universal de vídeos e áudios de YouTube, Instagram, Twitter, TikTok e +1800 plataformas com suporte a IA DeepSeek." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="app" class="app-container">
+    <!-- Topbar Header -->
+    <header class="app-header">
+      <div class="header-brand" id="brand-logo-btn" role="button" tabindex="0" title="Ir para o início (Baixar)">
+        <div class="logo-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>MediaDownloader <span class="brand-badge">PRO</span></h1>
+          <span class="brand-subtitle">Extrator Universal de Mídias & Áudios</span>
+        </div>
+      </div>
+
+      <nav class="nav-tabs" role="tablist">
+        <button class="tab-btn active" data-tab="download-tab" id="tab-download">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Baixar
+        </button>
+        <button class="tab-btn" data-tab="history-tab" id="tab-history">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Histórico
+        </button>
+        <button class="tab-btn" data-tab="settings-tab" id="tab-settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Configurações
+        </button>
+        <button type="button" class="btn-folder-shortcut" id="btn-open-global-folder" title="Abrir pasta de downloads no Windows Explorer">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+          <span>Abrir Pasta</span>
+        </button>
+      </nav>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      <!-- Tab 1: Download & Inspeção -->
+      <section class="tab-content active" id="download-tab">
+        <div class="card search-card">
+          <!-- Seletor de Plataformas -->
+          <div class="platform-selector-group">
+            <span class="platform-selector-label">Escolha a plataforma ou use a detecção automática:</span>
+            <div class="platform-pills" id="platform-pills">
+              <button type="button" class="pill-btn active" data-platform="auto">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                <span>Automático (+1800)</span>
+              </button>
+              <button type="button" class="pill-btn" data-platform="youtube">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
+                <span>YouTube</span>
+              </button>
+              <button type="button" class="pill-btn" data-platform="instagram">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+                <span>Instagram (Posts/@Perfil)</span>
+              </button>
+              <button type="button" class="pill-btn" data-platform="twitter">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path></svg>
+                <span>Twitter / X (@Perfil)</span>
+              </button>
+              <button type="button" class="pill-btn" data-platform="tiktok">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"></path></svg>
+                <span>TikTok</span>
+              </button>
+            </div>
+          </div>
+
+          <form id="inspect-form" class="url-input-group">
+            <div class="input-wrapper">
+              <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              <input type="text" id="url-input" placeholder="Cole a URL do vídeo/post ou digite @usuario para varrer perfil..." required autofocus autocomplete="off" />
+              <button type="button" class="btn-clear" id="btn-paste-clipboard" title="Colar da Área de Transferência">
+                Colar
+              </button>
+            </div>
+            <button type="submit" class="btn btn-primary" id="btn-inspect">
+              <span class="btn-text">Buscar</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Galeria de Perfil (Varredura de @usuario / Instagram / Twitter) -->
+        <div id="profile-container" class="profile-container hidden">
+          <!-- Card com Detalhes do Perfil -->
+          <div class="card profile-header-card">
+            <div class="profile-header-grid">
+              <div class="profile-avatar-wrapper">
+                <img id="profile-avatar" src="" alt="Avatar do Perfil" />
+              </div>
+              <div class="profile-info-content">
+                <div class="profile-title-row">
+                  <h3 id="profile-fullname">Nome do Usuário</h3>
+                  <span class="profile-username-badge" id="profile-username">@usuario</span>
+                  <span class="platform-badge" id="profile-platform-badge">Instagram</span>
+                </div>
+                <p id="profile-bio" class="profile-bio-text">Biografia do perfil...</p>
+                <div class="profile-stats-row">
+                  <span class="stat-badge"><strong id="profile-stat-posts">0</strong> posts</span>
+                  <span class="stat-badge"><strong id="profile-stat-followers">0</strong> seguidores</span>
+                </div>
+              </div>
+            </div>
+            <div class="profile-actions-bar">
+              <div class="profile-actions-left">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="profile-select-all" />
+                  <span>Selecionar Todas as Mídias (<span id="profile-selected-count">0</span>)</span>
+                </label>
+              </div>
+              <div class="profile-actions-right">
+                <button type="button" class="btn btn-success" id="btn-download-selected" disabled>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Baixar Selecionados
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grade de Posts / Mídias do Perfil -->
+          <div class="profile-media-grid" id="profile-media-grid">
+            <!-- Itens inseridos dinamicamente via JS -->
+          </div>
+        </div>
+
+        <!-- Container de Carrossel de Mídias (Posts com Múltiplas Fotos/Vídeos) -->
+        <div id="carousel-container" class="carousel-container hidden">
+          <div class="card carousel-header-card">
+            <div class="carousel-header-info">
+              <div class="carousel-badges-row">
+                <span class="platform-badge" id="carousel-platform-badge">Instagram</span>
+                <span class="carousel-author-badge" id="carousel-author">@jornitrack</span>
+                <span class="carousel-count-badge" id="carousel-total-count">5 Mídias</span>
+              </div>
+              <h3 id="carousel-title" class="carousel-post-title">Título da Publicação</h3>
+              <p id="carousel-description" class="carousel-description-text"></p>
+            </div>
+            <div class="carousel-actions-top">
+              <button type="button" class="btn btn-success btn-lg" id="btn-download-all-carousel">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Baixar Todas as Mídias</span>
+              </button>
+              <button type="button" class="btn btn-primary" id="btn-download-selected-carousel" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                <span>Baixar Selecionadas (<span id="carousel-selected-count">0</span>)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Grade Visual de Mídias do Carrossel -->
+          <div class="carousel-media-grid" id="carousel-media-grid">
+            <!-- Cards de mídias inseridos dinamicamente via JS -->
+          </div>
+        </div>
+
+        <!-- Preview & Configuração do Download Unitário -->
+        <div id="preview-container" class="preview-container hidden">
+          <div class="card preview-card">
+            <div class="preview-grid">
+              <!-- Thumbnail & Info -->
+              <div class="preview-media">
+                <div class="thumbnail-wrapper">
+                  <img id="preview-thumbnail" src="" alt="Miniatura do Vídeo" />
+                  <span class="duration-badge" id="preview-duration">00:00</span>
+                  <span class="platform-badge" id="preview-platform">YouTube</span>
+                </div>
+              </div>
+
+              <!-- Detalhes & Configurações de Download -->
+              <div class="preview-details">
+                <h3 id="preview-title" class="media-title">Título do Vídeo</h3>
+                <p id="preview-author" class="media-author">Canal / Autor</p>
+
+                <form id="download-config-form">
+                  <div class="form-row">
+                    <!-- Tipo de Mídia -->
+                    <div class="form-group">
+                      <label for="media-type-select">Tipo de Extração</label>
+                      <select id="media-type-select" class="form-select">
+                        <option value="video">Vídeo com Áudio</option>
+                        <option value="audio">Apenas Áudio (Música/Podcast)</option>
+                      </select>
+                    </div>
+
+                    <!-- Resolução / Qualidade de Vídeo -->
+                    <div class="form-group" id="group-video-quality">
+                      <label for="quality-select">Qualidade do Vídeo</label>
+                      <select id="quality-select" class="form-select">
+                        <option value="best">Melhor Disponível (Automático)</option>
+                        <option value="4k">4K Ultra HD (2160p)</option>
+                        <option value="1080p">Full HD (1080p)</option>
+                        <option value="720p">HD (720p)</option>
+                        <option value="480p">SD (480p)</option>
+                      </select>
+                    </div>
+
+                    <!-- Formato de Áudio -->
+                    <div class="form-group hidden" id="group-audio-format">
+                      <label for="audio-format-select">Formato de Áudio</label>
+                      <select id="audio-format-select" class="form-select">
+                        <option value="mp3">MP3 (320kbps de Alta Fidelidade)</option>
+                        <option value="m4a">M4A (AAC nativo)</option>
+                        <option value="opus">Opus (Alta compressão)</option>
+                        <option value="wav">WAV (Sem perdas)</option>
+                        <option value="flac">FLAC (Lossless)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Seção de Corte por Intervalo (Time-Range) -->
+                  <div class="time-range-box">
+                    <div class="time-range-header">
+                      <label class="checkbox-label">
+                        <input type="checkbox" id="enable-time-range" />
+                        <span>Cortar Trecho Específico (Time-Range Download)</span>
+                      </label>
+                    </div>
+                    <div class="time-range-inputs hidden" id="time-range-fields">
+                      <div class="form-group">
+                        <label for="time-start">Início (HH:MM:SS ou Segundos):</label>
+                        <input type="text" id="time-start" class="form-input" placeholder="00:00:10" />
+                      </div>
+                      <div class="form-group">
+                        <label for="time-end">Fim (HH:MM:SS ou Segundos):</label>
+                        <input type="text" id="time-end" class="form-input" placeholder="00:01:30" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Ações de Download -->
+                  <!-- Ações de Download -->
+                  <div class="preview-actions">
+                    <button type="submit" class="btn btn-success btn-lg" id="btn-start-download">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                      Baixar Agora
+                    </button>
+                  </div>
+                </form>
+
+                <!-- Barra de Progresso Direta na Aba de Download -->
+                <div id="inline-progress-box" class="inline-progress-box hidden">
+                  <div class="inline-progress-header">
+                    <span class="inline-progress-status" id="inline-status-text">Baixando...</span>
+                    <span class="inline-progress-percent" id="inline-percent-text">0%</span>
+                  </div>
+                  <div class="progress-container">
+                    <div class="progress-bar" id="inline-progress-bar" style="width: 0%"></div>
+                  </div>
+                  <div class="inline-progress-footer">
+                    <span id="inline-speed-text">-</span>
+                    <span id="inline-eta-text">-</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Seção Inicial de Recursos (Destaques da Home) -->
+        <div id="home-welcome-section" class="home-welcome-section">
+          <h3 class="section-title">Recursos & Plataformas Suportadas</h3>
+          <p class="section-subtitle">Selecione uma plataforma ou cole a URL diretamente no campo de busca acima.</p>
+          <div class="features-grid">
+            <!-- Card 1: YouTube -->
+            <div class="feature-card clickable-card" data-action="platform" data-platform="youtube" title="Clique para baixar do YouTube">
+              <div class="feature-card-header">
+                <div class="feature-icon-wrapper icon-yt">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
+                </div>
+                <span class="card-action-arrow">→</span>
+              </div>
+              <h4>YouTube</h4>
+              <p>Vídeos em 4K/1080p, Shorts, Playlists e extração de áudio MP3 320kbps via FFmpeg integrado.</p>
+            </div>
+
+            <!-- Card 2: Instagram -->
+            <div class="feature-card clickable-card" data-action="platform" data-platform="instagram" title="Clique para baixar do Instagram">
+              <div class="feature-card-header">
+                <div class="feature-icon-wrapper icon-ig">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path></svg>
+                </div>
+                <span class="card-action-arrow">→</span>
+              </div>
+              <h4>Instagram</h4>
+              <p>Baixe Reels, Posts e digite <code>@usuario</code> para carregar a galeria de fotos e vídeos em lote.</p>
+            </div>
+
+            <!-- Card 3: Twitter / X -->
+            <div class="feature-card clickable-card" data-action="platform" data-platform="twitter" title="Clique para baixar do Twitter / X">
+              <div class="feature-card-header">
+                <div class="feature-icon-wrapper icon-tw">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path></svg>
+                </div>
+                <span class="card-action-arrow">→</span>
+              </div>
+              <h4>Twitter / X</h4>
+              <p>Extraia vídeos com áudio de posts individuais ou varra perfis com mídias públicas.</p>
+            </div>
+
+            <!-- Card 4: TikTok -->
+            <div class="feature-card clickable-card" data-action="platform" data-platform="tiktok" title="Clique para baixar do TikTok">
+              <div class="feature-card-header">
+                <div class="feature-icon-wrapper icon-tk">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"></path></svg>
+                </div>
+                <span class="card-action-arrow">→</span>
+              </div>
+              <h4>TikTok</h4>
+              <p>Baixe vídeos em alta definição sem marca d'água de postagens ou perfis de criadores.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 2: Histórico de Downloads -->
+      <section class="tab-content" id="history-tab">
+        <div class="card">
+          <div class="card-header flex-between">
+            <div>
+              <h2>Histórico de Mídias Baixadas</h2>
+              <span class="header-hint">Acesso rápido aos arquivos gravados no disco</span>
+            </div>
+            <div class="history-controls">
+              <input type="text" id="history-search" class="form-input form-input-sm" placeholder="Buscar por título ou autor..." />
+              <select id="history-filter-platform" class="form-select form-select-sm">
+                <option value="all">Todas as Plataformas</option>
+                <option value="YouTube">YouTube</option>
+                <option value="Instagram">Instagram</option>
+                <option value="Twitter / X">Twitter / X</option>
+                <option value="TikTok">TikTok</option>
+              </select>
+              <button class="btn btn-sm btn-secondary" id="btn-refresh-history">Atualizar</button>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table" id="history-table">
+              <thead>
+                <tr>
+                  <th>Mídia</th>
+                  <th>Plataforma</th>
+                  <th>Tipo / Qualidade</th>
+                  <th>Tamanho</th>
+                  <th>Data</th>
+                  <th>Status</th>
+                  <th class="text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="history-tbody">
+                <!-- Linhas preenchidas dinamicamente -->
+              </tbody>
+            </table>
+            <div class="empty-state hidden" id="history-empty">
+              <p>Nenhum registro encontrado no histórico.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 3: Configurações -->
+      <section class="tab-content" id="settings-tab">
+        <div class="card">
+          <div class="card-header">
+            <h2>Configurações do Sistema</h2>
+            <span class="header-hint">Personalização de pastas e formatos de mídia padrão</span>
+          </div>
+
+          <form id="settings-form" class="settings-grid">
+            <div class="form-group full-width">
+              <label for="setting-download-folder">Pasta de Destino dos Downloads:</label>
+              <div class="folder-input-wrapper">
+                <input type="text" id="setting-download-folder" class="form-input" placeholder="Pasta padrão do projeto (./downloads)" />
+                <button type="button" class="btn btn-secondary" id="btn-browse-folder">
+                  Procurar Pasta...
+                </button>
+              </div>
+              <small class="form-help">Deixe em branco ou use "./downloads" para manter portátil na pasta do projeto.</small>
+            </div>
+
+            <div class="form-group">
+              <label for="setting-default-quality">Qualidade Padrão de Vídeo:</label>
+              <select id="setting-default-quality" class="form-select">
+                <option value="best">Melhor Disponível (Best)</option>
+                <option value="1080p">1080p (Full HD)</option>
+                <option value="720p">720p (HD)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="setting-default-audio">Formato de Áudio Padrão:</label>
+              <select id="setting-default-audio" class="form-select">
+                <option value="mp3">MP3</option>
+                <option value="m4a">M4A</option>
+                <option value="flac">FLAC</option>
+              </select>
+            </div>
+
+            <!-- Seletor de Tema Visual -->
+            <div class="form-group full-width" style="margin-top: 0.5rem;">
+              <label>Tema Visual da Aplicação:</label>
+              <span class="header-hint" style="display: block; margin-bottom: 0.5rem;">Escolha o estilo de cores de sua preferência (aplicado e salvo instantaneamente):</span>
+              <div class="theme-selector-grid" id="theme-selector-grid">
+                <button type="button" class="theme-card active" data-theme-val="default">
+                  <div class="theme-preview theme-prev-default">
+                    <span class="prev-accent"></span>
+                  </div>
+                  <div class="theme-card-info">
+                    <strong>Azul Noturno</strong>
+                    <span>Padrão Escuro</span>
+                  </div>
+                </button>
+
+                <button type="button" class="theme-card" data-theme-val="gold">
+                  <div class="theme-preview theme-prev-gold">
+                    <span class="prev-accent"></span>
+                  </div>
+                  <div class="theme-card-info">
+                    <strong>Preto & Dourado</strong>
+                    <span>Gold Luxury</span>
+                  </div>
+                </button>
+
+                <button type="button" class="theme-card" data-theme-val="monochrome">
+                  <div class="theme-preview theme-prev-monochrome">
+                    <span class="prev-accent"></span>
+                  </div>
+                  <div class="theme-card-info">
+                    <strong>Preto & Cinza</strong>
+                    <span>Dark Slate Minimal</span>
+                  </div>
+                </button>
+
+                <button type="button" class="theme-card" data-theme-val="light">
+                  <div class="theme-preview theme-prev-light">
+                    <span class="prev-accent"></span>
+                  </div>
+                  <div class="theme-card-info">
+                    <strong>Claro Moderno</strong>
+                    <span>Clean Light</span>
+                  </div>
+                </button>
+
+                <button type="button" class="theme-card" data-theme-val="light-warm">
+                  <div class="theme-preview theme-prev-light-warm">
+                    <span class="prev-accent"></span>
+                  </div>
+                  <div class="theme-card-info">
+                    <strong>Claro Creme</strong>
+                    <span>Warm Sand</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-actions full-width">
+              <button type="submit" class="btn btn-success" id="btn-save-settings">
+                Salvar Configurações
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <!-- Floating Active Downloads Widget (Aparece apenas quando há downloads em andamento) -->
+    <div id="floating-queue-widget" class="floating-queue-widget hidden">
+      <div class="floating-queue-header" id="floating-queue-header-btn">
+        <div class="floating-queue-title">
+          <span class="floating-pulse-dot"></span>
+          <span>Downloads Ativos</span>
+          <span class="badge-count" id="floating-queue-count">0</span>
+        </div>
+        <button type="button" class="floating-btn-toggle" id="btn-toggle-floating-queue" title="Minimizar / Expandir">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+      </div>
+      <div class="floating-queue-body" id="floating-queue-list">
+        <!-- Itens ativos inseridos dinamicamente -->
+      </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
