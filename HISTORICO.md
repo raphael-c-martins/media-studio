@@ -46,6 +46,10 @@ Este documento registra a evolução arquitetural, decisões técnicas e diretri
   5. **Saneamento e Limpeza do Banco de Dados:**
      - Criação de backup preventivo `media_downloader.db.bak` (ignorado no Git).
      - Remoção de registros órfãos que continham erros de testes ou arquivos inexistentes, preservando 100% dos registros válidos com seus novos caminhos normalizados.
+  6. **Download Direto de Thumbnail/Capa ao Passar o Mouse (`routes_info.py`, `index.html`, `style.css` e `main.js`):**
+     - Adicionado efeito de hover na miniatura do vídeo com escurecimento suave (`brightness(0.7)`), zoom dinâmico e botão centralizado **"Baixar Capa"** com ícone de download.
+     - Criada rota dedicada `GET /api/info/download-thumbnail` com suporte a proxy seguro e cabeçalho `Content-Disposition: attachment; filename*=UTF-8''...` (RFC 5987), garantindo o download imediato da imagem em alta resolução sem bloqueios de CORS e com nome padronizado.
+     - Disparo instantâneo com toast notification de feedback no frontend.
 
 ### [2026-09-01] - Criação e Arquitetura Inicial do MediaDownloader Pro
 

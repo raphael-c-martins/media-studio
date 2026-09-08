@@ -1338,6 +1338,26 @@ function initializeApp() {
     });
   }
 
+  // Download da Capa/Thumbnail ao clicar na miniatura
+  const thumbWrapper = document.getElementById('preview-thumbnail-wrapper');
+  if (thumbWrapper) {
+    thumbWrapper.addEventListener('click', (e) => {
+      if (e.target.closest('.platform-badge') || e.target.closest('.duration-badge')) return;
+
+      if (!state.currentInspect || !state.currentInspect.thumbnail) {
+        showToast('Nenhuma miniatura disponível para download.', 'warning');
+        return;
+      }
+
+      const thumbUrl = state.currentInspect.thumbnail;
+      const title = state.currentInspect.title || 'thumbnail';
+      const downloadApi = `${API_BASE}/api/info/download-thumbnail?url=${encodeURIComponent(thumbUrl)}&title=${encodeURIComponent(title)}`;
+
+      triggerBrowserDownload(downloadApi, `${title} [Thumbnail].jpg`);
+      showToast('Iniciando download da capa...', 'info', 2000);
+    });
+  }
+
   // Botão Abrir Pasta de Downloads no Windows Explorer
   const btnOpenFolder = document.getElementById('btn-open-global-folder');
   if (btnOpenFolder) {

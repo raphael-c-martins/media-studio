@@ -174,8 +174,18 @@
             <div class="preview-grid">
               <!-- Thumbnail & Info -->
               <div class="preview-media">
-                <div class="thumbnail-wrapper">
+                <div class="thumbnail-wrapper" id="preview-thumbnail-wrapper" title="Clique para baixar a capa">
                   <img id="preview-thumbnail" src="" alt="Miniatura do Vídeo" />
+                  <div class="thumbnail-download-overlay" id="thumbnail-download-overlay">
+                    <div class="thumbnail-download-btn">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
+                      <span>Baixar Capa</span>
+                    </div>
+                  </div>
                   <span class="duration-badge" id="preview-duration">00:00</span>
                   <span class="platform-badge" id="preview-platform">YouTube</span>
                 </div>
