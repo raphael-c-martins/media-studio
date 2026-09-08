@@ -110,6 +110,7 @@ from fastapi.responses import FileResponse
 from app.config import DOWNLOADS_DIR, BASE_DIR
 
 @router.get("/{download_id}/file")
+@router.head("/{download_id}/file")
 async def download_file_to_browser(download_id: str):
     """Envia o arquivo baixado diretamente para o navegador do usuário (FileResponse)."""
     async with get_db_connection() as db:
@@ -122,10 +123,21 @@ async def download_file_to_browser(download_id: str):
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Arquivo físico não existe no disco.")
 
+        # Usar o nome real do arquivo no disco (já contém extensão correta)
+        real_filename = file_path.name
+
+        # Gerar Content-Disposition com suporte a UTF-8 (RFC 5987)
+        from urllib.parse import quote
+        ascii_name = real_filename.encode('ascii', 'replace').decode('ascii')
+        utf8_name = quote(real_filename, safe='')
+
         return FileResponse(
             path=str(file_path),
-            filename=file_path.name,
-            media_type="application/octet-stream"
+            filename=real_filename,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{utf8_name}"
+            }
         )
 
 @router.post("/open-folder-global", response_model=dict)

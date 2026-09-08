@@ -1,6 +1,8 @@
 import asyncio
+import glob
 import json
 import logging
+import os
 import re
 import uuid
 import httpx
@@ -9,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Set, Optional
 
-from app.config import DOWNLOADS_DIR, MAX_CONCURRENT_DOWNLOADS
+from app.config import BASE_DIR, DOWNLOADS_DIR, MAX_CONCURRENT_DOWNLOADS
 from app.database import get_db_connection
 from app.models import DownloadRequest, DownloadItemResponse
 from app.services.downloader import (
@@ -183,7 +185,12 @@ class QueueManager:
             # Buscar pasta de destino das configurações
             cursor = await db.execute("SELECT value FROM settings WHERE key = 'download_folder'")
             row = await cursor.fetchone()
-            target_folder = Path(row["value"]) if row else DOWNLOADS_DIR
+            raw_folder = row["value"] if row and row["value"] else DOWNLOADS_DIR
+            target_folder = Path(raw_folder)
+            if not target_folder.is_absolute():
+                target_folder = (BASE_DIR / target_folder).resolve()
+            else:
+                target_folder = target_folder.resolve()
             target_folder.mkdir(parents=True, exist_ok=True)
 
             await db.execute("UPDATE downloads SET status = 'downloading' WHERE id = ?", (download_id,))
@@ -194,9 +201,15 @@ class QueueManager:
         last_percent = 0.0
         downloaded_file_path = ""
         final_filesize = 0
+        # Caminho capturado pelo postprocessor_hook (arquivo FINAL, pós-merge)
+        postprocessed_filepath = ""
+
+        # Capturar referência do event loop do asyncio ANTES de entrar no thread pool
+        # para evitar 'There is no current event loop in thread' dentro do progress_hook
+        main_loop = asyncio.get_running_loop()
 
         def progress_hook(d: Dict[str, Any]):
-            nonlocal last_percent, downloaded_file_path, final_filesize
+            nonlocal last_percent, final_filesize
             if cancel_event.is_set():
                 raise Exception("Download cancelado pelo usuário.")
 
@@ -214,12 +227,19 @@ class QueueManager:
                     last_percent = percent
                     asyncio.run_coroutine_threadsafe(
                         self._update_progress(download_id, percent, speed_str, eta_str, total_bytes),
-                        asyncio.get_event_loop()
+                        main_loop
                     )
 
             elif d["status"] == "finished":
-                downloaded_file_path = d.get("filename", "")
                 final_filesize = d.get("total_bytes", 0)
+
+        def postprocessor_hook(d: Dict[str, Any]):
+            """Captura o caminho FINAL após pós-processamento (merge, conversão etc)."""
+            nonlocal postprocessed_filepath
+            if d.get("status") == "finished":
+                fp = d.get("info_dict", {}).get("filepath", "")
+                if fp and Path(fp).exists():
+                    postprocessed_filepath = str(Path(fp).resolve())
 
         # 1. Se direct_media_url for fornecido (URL direta de CDN já extraída)
         if req.direct_media_url:
@@ -264,16 +284,47 @@ class QueueManager:
             # Montar opções e executar no thread pool via yt-dlp com fallback para Instagram
             def _run_ytdl():
                 opts = build_download_options(req, target_folder, progress_hook, cancel_event)
+                # Registrar postprocessor_hook para capturar o caminho final (pós-merge)
+                opts["postprocessor_hooks"] = [postprocessor_hook]
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info_dict = ydl.extract_info(req.url, download=True)
                     return info_dict
 
             try:
                 info = await asyncio.to_thread(_run_ytdl)
-                if not downloaded_file_path and info:
-                    if "_filename" in info:
-                        downloaded_file_path = info["_filename"]
                 title = info.get("title") if info else None
+
+                # Prioridade para capturar o caminho final correto:
+                # 1. postprocessor_hook (mais confiável - caminho pós-merge/conversão)
+                if postprocessed_filepath and Path(postprocessed_filepath).exists():
+                    downloaded_file_path = postprocessed_filepath
+                # 2. requested_downloads do info_dict (yt-dlp moderno)
+                elif info and info.get("requested_downloads"):
+                    rd = info["requested_downloads"][0]
+                    fp = rd.get("filepath") or rd.get("filename", "")
+                    if fp and Path(fp).exists():
+                        downloaded_file_path = str(Path(fp).resolve())
+                # 3. Fallback: computar o nome final a partir do outtmpl
+                if not downloaded_file_path or not Path(downloaded_file_path).exists():
+                    import glob
+                    video_id = info.get("id", "") if info else ""
+                    safe_title = (title or "").replace("/", "_").replace("\\", "_")
+                    # Buscar pelo padrão do outtmpl: "titulo [id].ext"
+                    patterns = [
+                        str(target_folder / f"*{video_id}*.mp4"),
+                        str(target_folder / f"*{video_id}*.webm"),
+                        str(target_folder / f"*{video_id}*.mkv"),
+                        str(target_folder / f"*{video_id}*.mp3"),
+                        str(target_folder / f"*{video_id}*.m4a"),
+                    ]
+                    for pattern in patterns:
+                        candidates = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
+                        # Filtrar fragmentos temporários (ex: .f251-1.webm, .f140.m4a)
+                        valid = [c for c in candidates if not re.search(r'\.f\d+[-.]', Path(c).name)]
+                        if valid:
+                            downloaded_file_path = str(Path(valid[0]).resolve())
+                            break
+
             except Exception as ydl_err:
                 if "instagram.com" in req.url.lower() and "no video formats" in str(ydl_err).lower():
                     from app.services.instagram_helper import download_instagram_media_direct
@@ -284,6 +335,16 @@ class QueueManager:
                     title = req.custom_title or Path(downloaded_file_path).stem
                 else:
                     raise ydl_err
+
+        # Garantir que file_path é absoluto e computar tamanho final
+        if downloaded_file_path:
+            abs_path = Path(downloaded_file_path).resolve()
+            if abs_path.exists():
+                downloaded_file_path = str(abs_path)
+                final_filesize = abs_path.stat().st_size
+            else:
+                logger.warning(f"Arquivo final não encontrado no disco: {downloaded_file_path}")
+
         completed_at = datetime.utcnow().isoformat()
 
         async with get_db_connection() as db:

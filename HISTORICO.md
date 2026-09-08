@@ -17,6 +17,36 @@ Este documento registra a evolução arquitetural, decisões técnicas e diretri
 
 ## 🚀 Linha do Tempo de Atualizações
 
+### [2026-09-08] - Correção do Pipeline de Pós-Processamento, Resolução de FFprobe, Iframe Memory-Safe e Unificação de Downloads
+
+- **Contexto e Causa Raiz:**
+  1. **Falha de Fusão de Vídeo/Áudio (Crash 100%):** Downloads de vídeos em alta resolução (1080p, 4K) alcançavam 100% mas falhavam na etapa final de merge do `yt-dlp` com erro de binário ausente. O pacote `imageio-ffmpeg` empacotava exclusivamente o `ffmpeg`, faltando o utilitário auxiliar `ffprobe`.
+  2. **Caminho Corrompido no Histórico (Fragmentos Temporários):** O hook de progresso capturava o nome do arquivo no evento `"finished"`, que em downloads particionados correspondia ao fragmento intermediário (ex: `.f251-1.webm`) que é deletado pelo `yt-dlp` imediatamente após o merge. Isso deixava o banco apontando para arquivos inexistentes.
+  3. **Download no Navegador com UUID e Sobrecarga de RAM:** O disparo de download via JavaScript `fetch() + blob` tentava alocar arquivos inteiros (centenas de megabytes ou gigabytes) na memória RAM do navegador e perdia o cabeçalho original de nome do arquivo devido ao CORS entre as portas `3030` e `8800`.
+  4. **Dispersão de Pastas de Armazenamento:** Com o processo do Uvicorn rodando no subdiretório `backend/`, arquivos baixados com caminhos relativos caíam dentro de `backend/downloads/` em vez da pasta raiz `./downloads`.
+
+- **Soluções Implementadas:**
+  1. **Integração Completa com `static-ffmpeg` (`ffmpeg_helper.py`):**
+     - O módulo foi reestruturado para utilizar o `static-ffmpeg` como fonte primária, provendo tanto o `ffmpeg` quanto o `ffprobe`.
+     - Implementado cache em memória (`_cached_ffmpeg_dir`) para evitar chamadas de sistema repetidas.
+     - O `yt-dlp` agora recebe o diretório base dos binários em `ffmpeg_location`, localizando ambos os executáveis automaticamente.
+     - Adicionada verificação de prontidão do `ffprobe` no endpoint `/health`.
+  2. **Captura Fidedigna do Arquivo Final (`queue_manager.py`):**
+     - Remoção da captura prematura no `progress_hook`.
+     - Inclusão do `postprocessor_hook` registrando o caminho absoluto do arquivo após a finalização de todos os pós-processadores de merge e metadados.
+     - Fallback multinível com varredura por glob e resolução de caminho canônico (`Path.resolve()`).
+  3. **Download Seguro no Navegador via Iframe Oculto e RFC 5987 (`routes_history.py` e `main.js`):**
+     - Substituição do `blob` por um elemento `<iframe>` oculto descartável, que inicia o download nativo do navegador sem consumir memória RAM local.
+     - Implementação no backend de cabeçalho `Content-Disposition: attachment; filename="..." filename*=UTF-8''...` para conformidade com a RFC 5987, preservando acentos, caracteres especiais e espaços nos títulos originais dos vídeos.
+     - Adicionado decorator `@router.head()` para validação prévia de requisições de cabeçalho.
+  4. **Unificação e Normalização do Diretório de Downloads:**
+     - Garantida a resolução absoluta de `target_folder` contra `BASE_DIR` em `queue_manager.py` e `routes_settings.py`.
+     - Migração física de todas as mídias salvas em `backend/downloads/` para o diretório raiz `downloads/`.
+     - Atualização da chave `download_folder` no banco SQLite para o caminho absoluto oficial.
+  5. **Saneamento e Limpeza do Banco de Dados:**
+     - Criação de backup preventivo `media_downloader.db.bak` (ignorado no Git).
+     - Remoção de registros órfãos que continham erros de testes ou arquivos inexistentes, preservando 100% dos registros válidos com seus novos caminhos normalizados.
+
 ### [2026-09-01] - Criação e Arquitetura Inicial do MediaDownloader Pro
 
 - **Contexto e Motivação:**

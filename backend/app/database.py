@@ -77,7 +77,7 @@ async def init_db():
 
         # Configurações padrão iniciais (se não existirem)
         default_settings = [
-            ("download_folder", str(DB_PATH.parent / "downloads")),
+            ("download_folder", str((DB_PATH.parent / "downloads").resolve())),
             ("default_format", "best"),
             ("default_audio_format", "mp3"),
             ("deepseek_api_key", ""),

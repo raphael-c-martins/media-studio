@@ -6,6 +6,7 @@ from typing import Dict
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
+from app.config import BASE_DIR
 from app.database import get_db_connection
 from app.models import SettingsUpdateRequest
 
@@ -29,7 +30,12 @@ async def update_settings(payload: SettingsUpdateRequest):
             # Validar pasta de download se fornecida
             if k == "download_folder" and v:
                 p = Path(v)
+                if not p.is_absolute():
+                    p = (BASE_DIR / p).resolve()
+                else:
+                    p = p.resolve()
                 p.mkdir(parents=True, exist_ok=True)
+                v = str(p)
 
             await db.execute("""
                 INSERT INTO settings (key, value, updated_at)

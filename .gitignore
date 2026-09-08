@@ -18,10 +18,13 @@ TEMPORARIO/
 /TEMPORARIO/
 *.tmp
 *.temp
+*.bak
 
 # Mídias Baixadas (Arquivos locais do usuário)
 downloads/
 /downloads/
+backend/downloads/
+/backend/downloads/
 
 # Python Cache
 __pycache__/

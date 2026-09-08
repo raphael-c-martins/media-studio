@@ -14,46 +14,117 @@ const state = {
 };
 
 // ==========================================
-// SELETOR DE PLATAFORMAS
+// SELETOR DE PLATAFORMAS & DETECÇÃO AUTOMÁTICA
 // ==========================================
+const PLATFORM_PLACEHOLDERS = {
+  auto: 'Cole a URL do vídeo/post ou digite @usuario para varrer perfil...',
+  youtube: 'Cole a URL do vídeo, Shorts, Playlist ou canal (@canal)...',
+  instagram: 'Cole a URL do Post/Reels ou digite @usuario para varrer perfil...',
+  twitter: 'Cole a URL do Tweet ou digite @usuario para varrer posts...',
+  tiktok: 'Cole a URL do vídeo ou digite @usuario do TikTok...'
+};
+
+const PLATFORM_NAMES = {
+  auto: 'Detecção Automática (+1800 sites)',
+  youtube: 'YouTube',
+  instagram: 'Instagram',
+  twitter: 'Twitter / X',
+  tiktok: 'TikTok'
+};
+
+function detectPlatformFromUrl(urlOrText) {
+  if (!urlOrText || typeof urlOrText !== 'string') return null;
+  const str = urlOrText.toLowerCase().trim();
+
+  if (/instagram\.com|instagr\.am/i.test(str)) {
+    return 'instagram';
+  }
+  if (/youtube\.com|youtu\.be/i.test(str)) {
+    return 'youtube';
+  }
+  if (/twitter\.com|(?:^|https?:\/\/|www\.)x\.com/i.test(str)) {
+    return 'twitter';
+  }
+  if (/tiktok\.com/i.test(str)) {
+    return 'tiktok';
+  }
+  if (/^https?:\/\//i.test(str)) {
+    return 'auto';
+  }
+
+  return null;
+}
+
+function selectPlatform(platformKey, shouldFocus = false, notify = false) {
+  const validPlatforms = ['auto', 'youtube', 'instagram', 'twitter', 'tiktok'];
+  const plat = validPlatforms.includes(platformKey) ? platformKey : 'auto';
+
+  const isChanging = state.selectedPlatform !== plat;
+  state.selectedPlatform = plat;
+
+  const pills = document.querySelectorAll('.pill-btn');
+  pills.forEach(p => {
+    p.classList.toggle('active', p.getAttribute('data-platform') === plat);
+  });
+
+  const input = document.getElementById('url-input');
+  if (input) {
+    if (!input.value) {
+      input.placeholder = PLATFORM_PLACEHOLDERS[plat] || PLATFORM_PLACEHOLDERS.auto;
+    }
+    if (shouldFocus) {
+      input.focus();
+    }
+  }
+
+  const searchCard = document.querySelector('.search-card');
+  if (searchCard && isChanging) {
+    searchCard.classList.remove('highlight-pulse');
+    void searchCard.offsetWidth; // Trigger reflow
+    searchCard.classList.add('highlight-pulse');
+  }
+
+  if (notify && isChanging && plat !== 'auto') {
+    const name = PLATFORM_NAMES[plat] || plat;
+    showToast(`Plataforma ${name} selecionada automaticamente!`, 'info', 2500);
+  }
+}
+
 function initPlatformPills() {
   const pills = document.querySelectorAll('.pill-btn');
   const input = document.getElementById('url-input');
-  const searchCard = document.querySelector('.search-card');
-
-  const placeholders = {
-    auto: 'Cole a URL do vídeo/post ou digite @usuario para varrer perfil...',
-    youtube: 'Cole a URL do vídeo, Shorts, Playlist ou canal (@canal)...',
-    instagram: 'Cole a URL do Post/Reels ou digite @usuario para varrer perfil...',
-    twitter: 'Cole a URL do Tweet ou digite @usuario para varrer posts...',
-    tiktok: 'Cole a URL do vídeo ou digite @usuario do TikTok...'
-  };
-
-  const platformNames = {
-    auto: 'Detecção Automática (+1800 sites)',
-    youtube: 'YouTube',
-    instagram: 'Instagram',
-    twitter: 'Twitter / X',
-    tiktok: 'TikTok'
-  };
 
   pills.forEach(pill => {
     pill.addEventListener('click', () => {
-      pills.forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
       const plat = pill.getAttribute('data-platform');
-      state.selectedPlatform = plat;
-      input.placeholder = placeholders[plat] || placeholders.auto;
-      
-      if (searchCard) {
-        searchCard.classList.remove('highlight-pulse');
-        void searchCard.offsetWidth; // Trigger reflow
-        searchCard.classList.add('highlight-pulse');
-      }
-
-      input.focus();
+      selectPlatform(plat, true, false);
     });
   });
+
+  if (input) {
+    // Detectar automaticamente ao colar texto no campo
+    input.addEventListener('paste', () => {
+      setTimeout(() => {
+        const detected = detectPlatformFromUrl(input.value);
+        if (detected) {
+          selectPlatform(detected, false, true);
+        }
+      }, 10);
+    });
+
+    // Detectar ao digitar ou alterar o campo de busca
+    input.addEventListener('input', () => {
+      const val = input.value.trim();
+      if (!val) {
+        selectPlatform('auto', false, false);
+      } else {
+        const detected = detectPlatformFromUrl(val);
+        if (detected) {
+          selectPlatform(detected, false, false);
+        }
+      }
+    });
+  }
 }
 
 // ==========================================
@@ -179,16 +250,27 @@ async function parseResponseError(res, fallback = 'Erro ao processar requisiçã
 async function handleInspect(e) {
   if (e) e.preventDefault();
   const urlInput = document.getElementById('url-input');
+  if (!urlInput) return;
   const target = urlInput.value.trim();
-  if (!target) return;
+  if (!target) {
+    showToast('Cole a URL de uma mídia ou digite @usuario para iniciar a busca.', 'info', 3000);
+    urlInput.focus();
+    return;
+  }
+
+  // Detectar plataforma imediatamente ao iniciar busca
+  const detected = detectPlatformFromUrl(target);
+  if (detected) {
+    selectPlatform(detected, false, false);
+  }
 
   const btnInspect = document.getElementById('btn-inspect');
-  const btnText = btnInspect.querySelector('.btn-text');
-  const spinner = btnInspect.querySelector('.btn-spinner');
+  const btnText = btnInspect ? btnInspect.querySelector('.btn-text') : null;
+  const spinner = btnInspect ? btnInspect.querySelector('.btn-spinner') : null;
 
-  btnInspect.disabled = true;
-  btnText.innerText = 'Processando...';
-  spinner.classList.remove('hidden');
+  if (btnInspect) btnInspect.disabled = true;
+  if (btnText) btnText.innerText = 'Processando...';
+  if (spinner) spinner.classList.remove('hidden');
 
   const targetLower = target.toLowerCase();
   
@@ -228,6 +310,15 @@ async function handleSingleMediaInspect(url, btnInspect, btnText, spinner) {
 
     const data = await res.json();
     state.currentInspect = data;
+
+    // Sincronizar pill com a plataforma detectada pelo backend
+    if (data.platform) {
+      const platLower = data.platform.toLowerCase();
+      if (platLower.includes('instagram')) selectPlatform('instagram', false, false);
+      else if (platLower.includes('youtube')) selectPlatform('youtube', false, false);
+      else if (platLower.includes('twitter') || platLower.includes('x')) selectPlatform('twitter', false, false);
+      else if (platLower.includes('tiktok')) selectPlatform('tiktok', false, false);
+    }
     
     // Ocultar containers anteriores
     document.getElementById('profile-container').classList.add('hidden');
@@ -276,6 +367,15 @@ async function handleProfileScan(target, platform, btnInspect, btnText, spinner)
     const data = await res.json();
     state.profileData = data;
     state.selectedProfileItems.clear();
+
+    // Sincronizar pill com a plataforma retornada pelo perfil
+    if (data.platform) {
+      const platLower = data.platform.toLowerCase();
+      if (platLower.includes('instagram')) selectPlatform('instagram', false, false);
+      else if (platLower.includes('twitter') || platLower.includes('x')) selectPlatform('twitter', false, false);
+      else if (platLower.includes('tiktok')) selectPlatform('tiktok', false, false);
+      else if (platLower.includes('youtube')) selectPlatform('youtube', false, false);
+    }
 
     // Ocultar preview unitário, carrossel e destaques
     document.getElementById('preview-container').classList.add('hidden');
@@ -821,17 +921,18 @@ function initSSE() {
   };
 }
 
-function triggerBrowserDownload(url) {
+async function triggerBrowserDownload(url, suggestedFilename) {
   try {
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    a.setAttribute('download', '');
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => a.remove(), 1000);
+    // Usar iframe oculto para disparar o download sem carregar na memória
+    // O backend retorna Content-Disposition: attachment com o nome correto
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = url;
+    document.body.appendChild(iframe);
+    setTimeout(() => iframe.remove(), 30000);
   } catch (err) {
     console.error('Falha ao disparar download no navegador:', err);
+    showToast('Erro ao transferir arquivo para o navegador.', 'error');
   }
 }
 
@@ -847,7 +948,9 @@ function handleServerEvent(payload) {
   } else if (event === 'download_completed') {
     // 1. DISPARAR DOWNLOAD AUTOMÁTICO PARA A CAIXA DE DOWNLOADS DO NAVEGADOR
     if (data.id) {
-      triggerBrowserDownload(`${API_BASE}/api/history/${data.id}/file`);
+      // Montar nome sugerido a partir do título do vídeo
+      const safeTitle = (data.title || 'download').replace(/[\\/:*?"<>|]/g, '');
+      triggerBrowserDownload(`${API_BASE}/api/history/${data.id}/file`, `${safeTitle}.mp4`);
     }
 
     showToast(`Arquivo salvo no seu computador: ${data.title || 'Mídia'}`, 'success', 6000, [
@@ -1041,7 +1144,11 @@ async function loadHistory() {
     document.querySelectorAll('.btn-save-browser').forEach(b => {
       b.addEventListener('click', () => {
         const id = b.getAttribute('data-id');
-        window.open(`${API_BASE}/api/history/${id}/file`, '_blank');
+        // Extrair título da linha da tabela para nomear o arquivo
+        const row = b.closest('tr');
+        const titleEl = row ? row.querySelector('strong') : null;
+        const title = titleEl ? titleEl.textContent.replace(/[\\/:*?"<>|]/g, '') : 'download';
+        triggerBrowserDownload(`${API_BASE}/api/history/${id}/file`, `${title}.mp4`);
       });
     });
     document.querySelectorAll('.btn-open-file').forEach(b => {
@@ -1183,33 +1290,53 @@ async function handleBrowseFolder() {
 // ==========================================
 // INICIALIZAÇÃO GERAL & EVENT LISTENERS
 // ==========================================
-document.addEventListener('DOMContentLoaded', () => {
+function initializeApp() {
   initThemeSelector();
   initTabs();
+  initPlatformPills();
+  initClickableCards();
   initSSE();
   loadQueue();
 
-  // Formulários
-  document.getElementById('inspect-form').addEventListener('submit', handleInspect);
-  document.getElementById('download-config-form').addEventListener('submit', handleStartDownload);
+  // Formulários com verificação defensiva
+  const inspectForm = document.getElementById('inspect-form');
+  if (inspectForm) inspectForm.addEventListener('submit', handleInspect);
+
+  const downloadForm = document.getElementById('download-config-form');
+  if (downloadForm) downloadForm.addEventListener('submit', handleStartDownload);
+
   const aiForm = document.getElementById('ai-form');
   if (aiForm) aiForm.addEventListener('submit', handleAISummarize);
-  document.getElementById('settings-form').addEventListener('submit', handleSaveSettings);
 
-  // Botão Colar Área de Transferência
-  document.getElementById('btn-paste-clipboard').addEventListener('click', async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text && (text.startsWith('http://') || text.startsWith('https://'))) {
-        document.getElementById('url-input').value = text;
-        handleInspect();
-      } else {
-        showToast('Nenhuma URL válida encontrada na área de transferência.', 'info');
+  const settingsForm = document.getElementById('settings-form');
+  if (settingsForm) settingsForm.addEventListener('submit', handleSaveSettings);
+
+  // Botão Colar da Área de Transferência
+  const btnPaste = document.getElementById('btn-paste-clipboard');
+  if (btnPaste) {
+    btnPaste.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        const cleanText = (text || '').trim();
+        if (cleanText) {
+          const input = document.getElementById('url-input');
+          if (input) {
+            input.value = cleanText;
+            const detected = detectPlatformFromUrl(cleanText);
+            if (detected) {
+              selectPlatform(detected, false, true);
+            }
+            showToast('Link colado da área de transferência!', 'success', 2000);
+            handleInspect();
+          }
+        } else {
+          showToast('Nenhum texto encontrado na área de transferência.', 'info', 2500);
+        }
+      } catch (e) {
+        showToast('Permissão de leitura da área de transferência negada pelo navegador.', 'info', 3000);
       }
-    } catch (e) {
-      showToast('Permissão de leitura da área de transferência negada.', 'info');
-    }
-  });
+    });
+  }
 
   // Botão Abrir Pasta de Downloads no Windows Explorer
   const btnOpenFolder = document.getElementById('btn-open-global-folder');
@@ -1225,63 +1352,93 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Alternar Tipo de Mídia (Vídeo / Áudio)
-  document.getElementById('media-type-select').addEventListener('change', (e) => {
-    const isAudio = e.target.value === 'audio';
-    document.getElementById('group-video-quality').classList.toggle('hidden', isAudio);
-    document.getElementById('group-audio-format').classList.toggle('hidden', !isAudio);
-  });
+  const mediaTypeSelect = document.getElementById('media-type-select');
+  if (mediaTypeSelect) {
+    mediaTypeSelect.addEventListener('change', (e) => {
+      const isAudio = e.target.value === 'audio';
+      const grpVideo = document.getElementById('group-video-quality');
+      const grpAudio = document.getElementById('group-audio-format');
+      if (grpVideo) grpVideo.classList.toggle('hidden', isAudio);
+      if (grpAudio) grpAudio.classList.toggle('hidden', !isAudio);
+    });
+  }
 
   // Checkbox de Corte (Time-Range)
-  document.getElementById('enable-time-range').addEventListener('change', (e) => {
-    document.getElementById('time-range-fields').classList.toggle('hidden', !e.target.checked);
-  });
+  const enableTimeRange = document.getElementById('enable-time-range');
+  if (enableTimeRange) {
+    enableTimeRange.addEventListener('change', (e) => {
+      const timeFields = document.getElementById('time-range-fields');
+      if (timeFields) timeFields.classList.toggle('hidden', !e.target.checked);
+    });
+  }
 
-  // Botão Resumo IA Rápido do Card
-  document.getElementById('btn-quick-ai').addEventListener('click', () => {
-    if (state.currentInspect) {
-      document.getElementById('ai-url-input').value = state.currentInspect.url;
-      document.getElementById('tab-ai').click();
-      document.getElementById('btn-run-ai').click();
-    }
-  });
-
-  // Atualizar Fila e Histórico
-  document.getElementById('btn-refresh-queue').addEventListener('click', loadQueue);
-  document.getElementById('btn-refresh-history').addEventListener('click', loadHistory);
-  document.getElementById('history-search').addEventListener('input', () => {
-    clearTimeout(window._searchTimeout);
-    window._searchTimeout = setTimeout(loadHistory, 300);
-  });
-  document.getElementById('history-filter-platform').addEventListener('change', loadHistory);
-
-  // Seletor de Pasta
-  document.getElementById('btn-browse-folder').addEventListener('click', handleBrowseFolder);
-
-  // Inicializar Seletores de Plataforma e Cards Clicáveis
-  initPlatformPills();
-  initClickableCards();
-
-  // Listeners da Galeria de Perfil
-  document.getElementById('profile-select-all').addEventListener('change', (e) => {
-    const isChecked = e.target.checked;
-    const checkboxes = document.querySelectorAll('.media-card-select-checkbox');
-    checkboxes.forEach(cb => {
-      cb.checked = isChecked;
-      const url = cb.getAttribute('data-url');
-      if (isChecked) {
-        state.selectedProfileItems.add(url);
-      } else {
-        state.selectedProfileItems.delete(url);
+  // Botão Resumo IA Rápido do Card (se existir)
+  const btnQuickAI = document.getElementById('btn-quick-ai');
+  if (btnQuickAI) {
+    btnQuickAI.addEventListener('click', () => {
+      if (state.currentInspect) {
+        const aiUrlInput = document.getElementById('ai-url-input');
+        const tabAI = document.getElementById('tab-ai');
+        const btnRunAI = document.getElementById('btn-run-ai');
+        if (aiUrlInput) aiUrlInput.value = state.currentInspect.url;
+        if (tabAI) tabAI.click();
+        if (btnRunAI) btnRunAI.click();
       }
     });
-    updateProfileSelectionUI();
-  });
+  }
+
+  // Atualizar Fila e Histórico
+  const btnRefreshQueue = document.getElementById('btn-refresh-queue');
+  if (btnRefreshQueue) {
+    btnRefreshQueue.addEventListener('click', loadQueue);
+  }
+  const btnRefreshHistory = document.getElementById('btn-refresh-history');
+  if (btnRefreshHistory) {
+    btnRefreshHistory.addEventListener('click', loadHistory);
+  }
+  const historySearch = document.getElementById('history-search');
+  if (historySearch) {
+    historySearch.addEventListener('input', () => {
+      clearTimeout(window._searchTimeout);
+      window._searchTimeout = setTimeout(loadHistory, 300);
+    });
+  }
+  const historyFilterPlatform = document.getElementById('history-filter-platform');
+  if (historyFilterPlatform) {
+    historyFilterPlatform.addEventListener('change', loadHistory);
+  }
+
+  // Seletor de Pasta
+  const btnBrowseFolder = document.getElementById('btn-browse-folder');
+  if (btnBrowseFolder) {
+    btnBrowseFolder.addEventListener('click', handleBrowseFolder);
+  }
+
+  // Listeners da Galeria de Perfil
+  const profileSelectAll = document.getElementById('profile-select-all');
+  if (profileSelectAll) {
+    profileSelectAll.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      const checkboxes = document.querySelectorAll('.media-card-select-checkbox');
+      checkboxes.forEach(cb => {
+        cb.checked = isChecked;
+        const url = cb.getAttribute('data-url');
+        if (isChecked) {
+          state.selectedProfileItems.add(url);
+        } else {
+          state.selectedProfileItems.delete(url);
+        }
+      });
+      updateProfileSelectionUI();
+    });
+  }
 
   // Clique na Marca/Logo para voltar à Home (Baixar)
   const brandBtn = document.getElementById('brand-logo-btn');
   if (brandBtn) {
     brandBtn.addEventListener('click', () => {
-      document.getElementById('tab-download').click();
+      const tabDownload = document.getElementById('tab-download');
+      if (tabDownload) tabDownload.click();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
     brandBtn.addEventListener('keydown', (e) => {
@@ -1292,8 +1449,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  document.getElementById('btn-download-selected').addEventListener('click', handleDownloadSelectedProfile);
-});
+  const btnDlSelected = document.getElementById('btn-download-selected');
+  if (btnDlSelected) {
+    btnDlSelected.addEventListener('click', handleDownloadSelectedProfile);
+  }
+}
+
+// Inicialização segura compatível com ESM e carregamento assíncrono
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+  initializeApp();
+}
 
 // ==========================================
 // CARDS DE RECURSOS CLICÁVEIS (HOME)
@@ -1319,10 +1486,11 @@ function initClickableCards() {
         const input = document.getElementById('url-input');
         if (input) {
           input.focus();
-          document.getElementById('inspect-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const inspectForm = document.getElementById('inspect-form');
+          if (inspectForm) inspectForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         const name = platformFriendlyNames[platform] || 'Plataforma';
-        showToast(`Plataforma ${name} selecionada. Cole o link no campo acima.`, 'info', 2500);
+        showToast(`Plataforma ${name} selecionada. Cole o link no campo de busca.`, 'info', 2500);
       } else if (action === 'tab') {
         const tabId = card.getAttribute('data-tab');
         const targetTab = document.getElementById(tabId);
