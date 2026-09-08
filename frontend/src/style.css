@@ -1670,10 +1670,42 @@ body {
   color: var(--text-primary);
 }
 
+.inline-progress-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .inline-progress-percent {
   font-family: var(--font-mono);
   font-weight: 700;
   color: #38bdf8;
+}
+
+.btn-cancel-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background-color: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-cancel-inline:hover {
+  background-color: #ef4444;
+  border-color: #dc2626;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+.btn-cancel-inline:active {
+  transform: scale(0.95);
 }
 
 .inline-progress-footer {
@@ -1885,6 +1917,14 @@ body {
   padding: 0.6rem 0.75rem;
 }
 
+.floating-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
 .floating-item-title {
   font-size: 0.78rem;
   font-weight: 500;
@@ -1892,7 +1932,32 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 0.35rem;
+  flex: 1;
+}
+
+.btn-cancel-queue-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.btn-cancel-queue-item:hover {
+  background-color: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+.btn-cancel-queue-item:active {
+  transform: scale(0.92);
 }
 
 .floating-item-progress-row {

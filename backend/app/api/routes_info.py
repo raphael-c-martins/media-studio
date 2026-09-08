@@ -20,9 +20,13 @@ async def inspect_url(payload: UrlInspectRequest):
         logger.error(f"Erro ao inspecionar URL ({payload.url}): {e}")
         raise HTTPException(status_code=400, detail=f"Falha ao obter dados da mídia: {str(e)}")
 
+import unicodedata
+
 @router.head("/download-thumbnail")
+@router.head("/download-thumbnail/{filename}")
 @router.get("/download-thumbnail")
-async def download_thumbnail(url: str, title: Optional[str] = None):
+@router.get("/download-thumbnail/{filename}")
+async def download_thumbnail(url: str, title: Optional[str] = None, filename: Optional[str] = None):
     """Faz proxy seguro do download da thumbnail com cabeçalho de download attachment."""
     if not url or not (url.startswith("http://") or url.startswith("https://")):
         raise HTTPException(status_code=400, detail="URL de miniatura inválida.")
@@ -49,16 +53,27 @@ async def download_thumbnail(url: str, title: Optional[str] = None):
             elif "gif" in content_type or ".gif" in url.lower():
                 ext = "gif"
 
-            safe_title = re.sub(r'[\\/*?:"<>|]', "", title or "thumbnail").strip() or "thumbnail"
-            filename = f"{safe_title} [Thumbnail].{ext}"
-            ascii_name = re.sub(r"[^\x20-\x7E]", "_", filename)
-            encoded_name = quote(filename.encode("utf-8"))
+            safe_title = re.sub(r'[\r\n\t\\/*?:"<>|;]', "", title or "thumbnail").strip() or "thumbnail"
+            full_filename = f"{safe_title} [Thumbnail].{ext}"
+
+            # Transliterar para ASCII seguro sem caracteres proibidos do Windows
+            nfkd = unicodedata.normalize('NFKD', full_filename)
+            ascii_str = nfkd.encode('ascii', 'ignore').decode('ascii')
+            safe_ascii = re.sub(r'[\r\n\t\\/*?:"<>|;]', '', ascii_str).strip() or f"thumbnail.{ext}"
+            if not safe_ascii.lower().endswith(f".{ext}".lower()):
+                safe_ascii = f"{safe_ascii}.{ext}"
+
+            safe_utf8 = re.sub(r'[\r\n\t\\/*?:"<>|;]', '', full_filename).strip() or safe_ascii
+            if not safe_utf8.lower().endswith(f".{ext}".lower()):
+                safe_utf8 = f"{safe_utf8}.{ext}"
+
+            encoded_utf8 = quote(safe_utf8, safe='')
 
             return Response(
                 content=resp.content,
                 media_type=content_type,
                 headers={
-                    "Content-Disposition": f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded_name}',
+                    "Content-Disposition": f'attachment; filename="{safe_ascii}"; filename*=UTF-8\'\'{encoded_utf8}',
                     "Cache-Control": "public, max-age=86400"
                 }
             )

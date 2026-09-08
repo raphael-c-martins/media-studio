@@ -844,6 +844,12 @@ async function handleStartDownload(e) {
     return;
   }
 
+  // Prevenir bloqueio de fila com transmissões ao vivo em andamento
+  if (state.currentInspect.is_live) {
+    showToast('Transmissões ao vivo (lives) em andamento não podem ser baixadas. Aguarde o término da transmissão.', 'warning', 5000);
+    return;
+  }
+
   const mediaType = document.getElementById('media-type-select').value;
   const qualitySelect = document.getElementById('quality-select').value;
   const audioFormat = document.getElementById('audio-format-select').value;
@@ -921,19 +927,63 @@ function initSSE() {
   };
 }
 
-async function triggerBrowserDownload(url, suggestedFilename) {
+function triggerBrowserDownload(url, suggestedFilename) {
   try {
-    // Usar iframe oculto para disparar o download sem carregar na memória
-    // O backend retorna Content-Disposition: attachment com o nome correto
-    const iframe = document.createElement('iframe');
-    iframe.style.display = 'none';
-    iframe.src = url;
-    document.body.appendChild(iframe);
-    setTimeout(() => iframe.remove(), 30000);
+    const a = document.createElement('a');
+    a.href = url;
+    if (suggestedFilename) {
+      a.setAttribute('download', suggestedFilename);
+    }
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => a.remove(), 2000);
   } catch (err) {
     console.error('Falha ao disparar download no navegador:', err);
     showToast('Erro ao transferir arquivo para o navegador.', 'error');
   }
+}
+
+async function cancelDownload(downloadId) {
+  if (!downloadId) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/downloads/${downloadId}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Download cancelado com sucesso.', 'info', 2500);
+      state.activeQueue = state.activeQueue.filter(it => it.id !== downloadId);
+      renderFloatingQueue(state.activeQueue);
+      if (state.currentDownloadId === downloadId) {
+        resetInlineProgress();
+      }
+      loadHistory();
+    } else {
+      const err = await parseResponseError(res, 'Falha ao cancelar download.');
+      showToast(err, 'error');
+    }
+  } catch (e) {
+    console.error('Erro ao cancelar download:', e);
+    showToast('Erro de conexão ao tentar cancelar download.', 'error');
+  }
+}
+
+function resetInlineProgress() {
+  const inlineBox = document.getElementById('inline-progress-box');
+  if (inlineBox) {
+    inlineBox.classList.add('hidden');
+    const bar = document.getElementById('inline-progress-bar');
+    if (bar) {
+      bar.style.width = '0%';
+      bar.classList.remove('completed', 'error');
+    }
+    const statusEl = document.getElementById('inline-status-text');
+    if (statusEl) {
+      statusEl.innerText = 'Baixando...';
+      statusEl.style.color = '';
+    }
+    const percentEl = document.getElementById('inline-percent-text');
+    if (percentEl) percentEl.innerText = '0%';
+  }
+  state.currentDownloadId = null;
 }
 
 function handleServerEvent(payload) {
@@ -945,12 +995,20 @@ function handleServerEvent(payload) {
   } else if (event === 'download_progress') {
     updateProgressUI(data);
     updateInlineProgress(data);
+  } else if (event === 'download_cancelled') {
+    showToast('Download cancelado.', 'info', 3000);
+    loadQueue();
+    loadHistory();
+    if (state.currentDownloadId === data.id) {
+      resetInlineProgress();
+    }
   } else if (event === 'download_completed') {
     // 1. DISPARAR DOWNLOAD AUTOMÁTICO PARA A CAIXA DE DOWNLOADS DO NAVEGADOR
     if (data.id) {
-      // Montar nome sugerido a partir do título do vídeo
-      const safeTitle = (data.title || 'download').replace(/[\\/:*?"<>|]/g, '');
-      triggerBrowserDownload(`${API_BASE}/api/history/${data.id}/file`, `${safeTitle}.mp4`);
+      // Montar nome seguro a partir do título do vídeo
+      const safeTitle = (data.title || 'download').replace(/[\\/:*?"<>|]/g, '').trim() || 'video';
+      const cleanFilename = `${safeTitle}.mp4`;
+      triggerBrowserDownload(`${API_BASE}/api/history/${data.id}/file/${encodeURIComponent(cleanFilename)}`, cleanFilename);
     }
 
     showToast(`Arquivo salvo no seu computador: ${data.title || 'Mídia'}`, 'success', 6000, [
@@ -1070,7 +1128,15 @@ function renderFloatingQueue(items) {
     const eta = item.eta ? `• ${item.eta}` : '';
 
     itemEl.innerHTML = `
-      <div class="floating-item-title" title="${title}">${title}</div>
+      <div class="floating-item-header">
+        <div class="floating-item-title" title="${title}">${title}</div>
+        <button type="button" class="btn-cancel-queue-item" data-id="${item.id}" title="Cancelar download">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
       <div class="progress-container" style="height: 5px; margin-bottom: 0.35rem;">
         <div class="progress-bar" style="width: ${prog}%;"></div>
       </div>
@@ -1079,6 +1145,15 @@ function renderFloatingQueue(items) {
         <span class="floating-item-percent" style="font-weight: 600; color: #38bdf8;">${prog}%</span>
       </div>
     `;
+
+    const cancelBtn = itemEl.querySelector('.btn-cancel-queue-item');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancelDownload(item.id);
+      });
+    }
+
     listEl.appendChild(itemEl);
   });
 }
@@ -1144,11 +1219,16 @@ async function loadHistory() {
     document.querySelectorAll('.btn-save-browser').forEach(b => {
       b.addEventListener('click', () => {
         const id = b.getAttribute('data-id');
-        // Extrair título da linha da tabela para nomear o arquivo
         const row = b.closest('tr');
         const titleEl = row ? row.querySelector('strong') : null;
-        const title = titleEl ? titleEl.textContent.replace(/[\\/:*?"<>|]/g, '') : 'download';
-        triggerBrowserDownload(`${API_BASE}/api/history/${id}/file`, `${title}.mp4`);
+        const rawTitle = titleEl ? titleEl.textContent : 'download';
+        const safeTitle = rawTitle
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[\\/:*?"<>|]/g, '')
+          .trim() || 'video';
+        const cleanFilename = `${safeTitle}.mp4`;
+        triggerBrowserDownload(`${API_BASE}/api/history/${id}/file/${encodeURIComponent(cleanFilename)}`, cleanFilename);
       });
     });
     document.querySelectorAll('.btn-open-file').forEach(b => {
@@ -1351,10 +1431,28 @@ function initializeApp() {
 
       const thumbUrl = state.currentInspect.thumbnail;
       const title = state.currentInspect.title || 'thumbnail';
-      const downloadApi = `${API_BASE}/api/info/download-thumbnail?url=${encodeURIComponent(thumbUrl)}&title=${encodeURIComponent(title)}`;
+      const safeTitle = title
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[\\/:*?"<>|]/g, '')
+        .trim() || 'thumbnail';
+      const cleanFilename = `${safeTitle} [Thumbnail].jpg`;
+      const downloadApi = `${API_BASE}/api/info/download-thumbnail/${encodeURIComponent(cleanFilename)}?url=${encodeURIComponent(thumbUrl)}&title=${encodeURIComponent(title)}`;
 
-      triggerBrowserDownload(downloadApi, `${title} [Thumbnail].jpg`);
+      triggerBrowserDownload(downloadApi, cleanFilename);
       showToast('Iniciando download da capa...', 'info', 2000);
+    });
+  }
+
+  // Botão Cancelar Download Inline
+  const btnCancelInline = document.getElementById('btn-cancel-inline-download');
+  if (btnCancelInline) {
+    btnCancelInline.addEventListener('click', () => {
+      if (state.currentDownloadId) {
+        cancelDownload(state.currentDownloadId);
+      } else {
+        resetInlineProgress();
+      }
     });
   }
 

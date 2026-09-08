@@ -17,7 +17,32 @@ Este documento registra a evolução arquitetural, decisões técnicas e diretri
 
 ## 🚀 Linha do Tempo de Atualizações
 
-### [2026-09-08] - Correção do Pipeline de Pós-Processamento, Resolução de FFprobe, Iframe Memory-Safe e Unificação de Downloads
+### [2026-09-08] - Correção do Formato de Saída no Navegador (Nomes/Extensões), Cancelamento da Fila e Blindagem contra Lives
+
+- **Contexto e Causa Raiz:**
+  1. **Nomes de Arquivos Salvos como UUID no Navegador:** Ao concluir o download de um vídeo ou clicar para baixar a thumbnail, o navegador salvava o arquivo com o identificador interno em UUID (ex: `99483c4f-609e-4229-9054-e03d8912ce3b`) sem qualquer extensão (`.mp4`, `.jpg`), em vez do título limpo da mídia. As causas principais foram:
+     - Uso de transliteração ASCII com substituição (`.encode('ascii', 'replace')`), que convertia caracteres acentuados (como `Ç` ou `Ã`) em pontos de interrogação (`?`). No Windows NT, `?` é um caractere estritamente proibido em nomes de arquivos (`\ / : * ? " < > |`), fazendo o Chromium descartar o `Content-Disposition` e recorrer ao ID temporário.
+     - As rotas de arquivo e thumbnail terminavam sem o nome do arquivo no segmento final do caminho da URL (ex: `/api/history/{id}/file`), induzindo o navegador a usar o UUID como nome padrão caso o cabeçalho fosse sanitizado.
+  2. **Travamento da Fila por Transmissões ao Vivo (Lives):** A inserção de URLs de transmissões ao vivo em andamento bloqueava indefinidamente o worker do `QueueManager`, pois o stream contínuo impedia o encerramento do download.
+  3. **Ausência de Cancelamento de Itens da Fila:** Não havia mecanismo na interface gráfica (nem na barra de progresso inline, nem no widget flutuante) para que o usuário pudesse abortar um download em execução ou pendente, e a chamada de cancelamento no backend corria o risco de interromper o loop contínuo do próprio worker.
+
+- **Soluções Implementadas:**
+  1. **Sanitização Resiliente e Nomes Canônicos com Extensão (`routes_history.py` e `routes_info.py`):**
+     - A função `clean_filename_for_browser` foi reformulada para utilizar `unicodedata.normalize('NFKD', s).encode('ascii', 'ignore')`, convertendo acentos em letras equivalentes (`Ç` -> `C`, `Ã` -> `A`) sem jamais gerar `?`.
+     - Todos os caracteres proibidos pelo sistema de arquivos do Windows (`\ / : * ? " < > |`, controles de quebra de linha e ponto e vírgula) são estritamente filtrados.
+     - Garantida a injeção obrigatória da extensão da mídia (`.mp4`, `.jpg`, `.webp`, `.png`) tanto no nome ASCII quanto no nome UTF-8.
+     - Suporte nas rotas da API para inclusão explícita do nome no path da URL:
+       - `GET /api/history/{id}/file/{filename}`
+       - `GET /api/info/download-thumbnail/{filename}`
+     - Cabeçalho duplo `Content-Disposition: attachment; filename="{safe_ascii}"; filename*=UTF-8''{encoded_utf8}` para máxima conformidade com a RFC 5987.
+  2. **Disparo de Download no Frontend com Tag `<a>` e Atributo `download` (`main.js`):**
+     - O método `triggerBrowserDownload` utiliza âncoras nativas com o atributo `download="nome.ext"`, apontando para rotas com os nomes já codificados na URL, assegurando que o navegador aplique o nome correto em 100% dos cenários.
+     - Atualizados os disparos no evento `download_completed`, no botão "Salvar no PC" do histórico e no download da capa.
+  3. **Controle de Cancelamento na Interface e Isolamento do Worker (`queue_manager.py`, `index.html`, `style.css`, `main.js`):**
+     - Adicionado botão de cancelamento inline (`#btn-cancel-inline-download`) na barra de progresso principal.
+     - Adicionado botão de cancelamento individual (`.btn-cancel-queue-item`) no cabeçalho de cada item do widget de fila flutuante.
+     - No backend, o processamento de cada download pelo worker é isolado em uma `asyncio.Task` filha, permitindo cancelar a tarefa específica sem afetar a continuidade do loop do worker.
+     - Adicionada trava contra transmissões ao vivo no frontend e no backend (`is_live`), impedindo o enfileiramento de streams ativos que poderiam congestionar os workers.
 
 - **Contexto e Causa Raiz:**
   1. **Falha de Fusão de Vídeo/Áudio (Crash 100%):** Downloads de vídeos em alta resolução (1080p, 4K) alcançavam 100% mas falhavam na etapa final de merge do `yt-dlp` com erro de binário ausente. O pacote `imageio-ffmpeg` empacotava exclusivamente o `ffmpeg`, faltando o utilitário auxiliar `ffprobe`.

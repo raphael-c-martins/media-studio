@@ -156,12 +156,14 @@ class QueueManager:
                     self.queue.task_done()
                     continue
 
-                task = asyncio.current_task()
-                if task:
-                    self.active_tasks[download_id] = task
+                # Criar uma task filha para o processamento, preservando a worker_loop
+                process_task = asyncio.create_task(
+                    self._process_download(download_id, req, cancel_event)
+                )
+                self.active_tasks[download_id] = process_task
 
                 try:
-                    await self._process_download(download_id, req, cancel_event)
+                    await process_task
                 except asyncio.CancelledError:
                     logger.info(f"Download {download_id} cancelado.")
                 except Exception as ex:
@@ -173,7 +175,10 @@ class QueueManager:
                     self.queue.task_done()
 
             except asyncio.CancelledError:
-                break
+                if not self._running:
+                    break
+                logger.warning(f"Worker {worker_id} recebeu CancelledError, mantendo loop ativo...")
+                await asyncio.sleep(0.5)
             except Exception as e:
                 logger.error(f"Erro no worker {worker_id}: {e}", exc_info=True)
                 await asyncio.sleep(1)
@@ -287,6 +292,10 @@ class QueueManager:
                 # Registrar postprocessor_hook para capturar o caminho final (pós-merge)
                 opts["postprocessor_hooks"] = [postprocessor_hook]
                 with yt_dlp.YoutubeDL(opts) as ydl:
+                    # Verificar se é live stream em andamento para não travar a fila
+                    pre_info = ydl.extract_info(req.url, download=False)
+                    if pre_info and pre_info.get("is_live"):
+                        raise ValueError("Transmissões ao vivo (lives) em andamento não podem ser baixadas enquanto o streaming estiver ativo. Aguarde o encerramento da transmissão.")
                     info_dict = ydl.extract_info(req.url, download=True)
                     return info_dict
 

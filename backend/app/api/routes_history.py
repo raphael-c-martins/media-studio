@@ -109,9 +109,33 @@ async def open_file_media(download_id: str):
 from fastapi.responses import FileResponse
 from app.config import DOWNLOADS_DIR, BASE_DIR
 
+import unicodedata
+import re
+from urllib.parse import quote
+
+def clean_filename_for_browser(filename: str) -> tuple:
+    """Retorna (ascii_name, utf8_name) limpos e 100% compatíveis com Windows e RFC 5987."""
+    nfkd = unicodedata.normalize('NFKD', filename)
+    ascii_str = nfkd.encode('ascii', 'ignore').decode('ascii')
+    # Remover caracteres proibidos no Windows NT: \ / : * ? " < > |, além de controles e ponto e vírgula
+    safe_ascii = re.sub(r'[\r\n\t\\/*?:"<>|;]', '', ascii_str).strip() or "download.mp4"
+    safe_utf8 = re.sub(r'[\r\n\t\\/*?:"<>|;]', '', filename).strip() or safe_ascii
+
+    # Garantir que a extensão .mp4 ou a extensão original esteja presente
+    ext = Path(filename).suffix or ".mp4"
+    if not safe_ascii.lower().endswith(ext.lower()):
+        safe_ascii = f"{safe_ascii}{ext}"
+    if not safe_utf8.lower().endswith(ext.lower()):
+        safe_utf8 = f"{safe_utf8}{ext}"
+
+    encoded_utf8 = quote(safe_utf8, safe='')
+    return safe_ascii, encoded_utf8
+
 @router.get("/{download_id}/file")
+@router.get("/{download_id}/file/{filename}")
 @router.head("/{download_id}/file")
-async def download_file_to_browser(download_id: str):
+@router.head("/{download_id}/file/{filename}")
+async def download_file_to_browser(download_id: str, filename: Optional[str] = None):
     """Envia o arquivo baixado diretamente para o navegador do usuário (FileResponse)."""
     async with get_db_connection() as db:
         cursor = await db.execute("SELECT file_path, title FROM downloads WHERE id = ?", (download_id,))
@@ -123,20 +147,16 @@ async def download_file_to_browser(download_id: str):
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="Arquivo físico não existe no disco.")
 
-        # Usar o nome real do arquivo no disco (já contém extensão correta)
         real_filename = file_path.name
-
-        # Gerar Content-Disposition com suporte a UTF-8 (RFC 5987)
-        from urllib.parse import quote
-        ascii_name = real_filename.encode('ascii', 'replace').decode('ascii')
-        utf8_name = quote(real_filename, safe='')
+        ascii_name, utf8_name = clean_filename_for_browser(real_filename)
 
         return FileResponse(
             path=str(file_path),
-            filename=real_filename,
+            filename=ascii_name,
             media_type="application/octet-stream",
+            content_disposition_type="attachment",
             headers={
-                "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{utf8_name}"
+                "Content-Disposition": f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{utf8_name}'
             }
         )
 
