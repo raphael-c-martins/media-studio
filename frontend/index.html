@@ -1,522 +1,509 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="system">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MediaDownloader Pro — Baixador Universal de Mídias</title>
-  <meta name="description" content="Baixador assíncrono universal de vídeos e áudios de YouTube, Instagram, Twitter, TikTok e +1800 plataformas com suporte a IA DeepSeek." />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./src/style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Media Studio</title>
+  <meta name="description" content="Ferramentas locais de mídia do Relíquias: download de vídeos e fotos e extração de frames em resolução original.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/main.js"></script>
 </head>
 <body>
-  <div id="app" class="app-container">
-    <!-- Topbar Header -->
-    <header class="app-header">
-      <div class="header-brand" id="brand-logo-btn" role="button" tabindex="0" title="Ir para o início (Baixar)">
-        <div class="logo-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
+  <header class="topbar">
+    <a class="brand" href="#baixar" aria-label="Media Studio, início">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">Media Studio</span>
+    </a>
+    <nav class="tabs" role="tablist" aria-label="Seções">
+      <a class="tab" role="tab" href="#baixar" data-view="download">Baixar</a>
+      <a class="tab" role="tab" href="#historico" data-view="history">Histórico</a>
+      <a class="tab" role="tab" href="#frames" data-view="frames">Frames</a>
+      <a class="tab" role="tab" href="#configuracoes" data-view="settings">Configurações</a>
+    </nav>
+    <div class="topbar-actions">
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-open-downloads-folder">Abrir pasta de downloads</button>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-theme" aria-label="Alternar tema">Tema</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <!-- ================= BAIXAR ================= -->
+    <section class="view" id="view-download" data-view="download" aria-labelledby="h-download">
+      <div class="view-head">
+        <h1 id="h-download">Baixar mídia</h1>
+        <p class="muted">Cole o link de um vídeo ou post, ou digite @usuario para listar as publicações de um perfil.</p>
+      </div>
+
+      <form class="panel search" id="inspect-form" autocomplete="off">
+        <div class="segmented" id="platform-select" role="radiogroup" aria-label="Plataforma">
+          <button type="button" class="seg active" data-platform="auto" role="radio" aria-checked="true">Automático</button>
+          <button type="button" class="seg" data-platform="youtube" role="radio" aria-checked="false">YouTube</button>
+          <button type="button" class="seg" data-platform="instagram" role="radio" aria-checked="false">Instagram</button>
+          <button type="button" class="seg" data-platform="twitter" role="radio" aria-checked="false">X / Twitter</button>
+          <button type="button" class="seg" data-platform="tiktok" role="radio" aria-checked="false">TikTok</button>
         </div>
-        <div class="brand-text">
-          <h1>MediaDownloader <span class="brand-badge">PRO</span></h1>
-          <span class="brand-subtitle">Extrator Universal de Mídias & Áudios</span>
+        <div class="search-row">
+          <label class="sr-only" for="url-input">Link ou perfil</label>
+          <input type="text" id="url-input" class="input input-lg" placeholder="https://... ou @usuario" required autofocus>
+          <button type="button" class="btn btn-secondary" id="btn-paste">Colar</button>
+          <button type="submit" class="btn btn-primary" id="btn-inspect">Buscar</button>
+        </div>
+      </form>
+
+      <!-- Mídia única -->
+      <div class="panel hidden" id="preview-panel">
+        <div class="preview">
+          <figure class="preview-media">
+            <img id="preview-thumb" alt="Capa da mídia">
+            <span class="tag tag-dark preview-duration hidden" id="preview-duration"></span>
+            <button type="button" class="btn btn-secondary btn-sm preview-cover-btn" id="btn-download-cover">Baixar capa</button>
+          </figure>
+          <div class="preview-body">
+            <div class="meta-line">
+              <span class="tag" id="preview-platform"></span>
+              <span class="muted" id="preview-author"></span>
+            </div>
+            <h2 class="preview-title" id="preview-title"></h2>
+
+            <form id="download-form" class="form-grid">
+              <div class="field" id="field-media-type">
+                <label for="media-type">Tipo</label>
+                <select id="media-type" class="input">
+                  <option value="video">Vídeo com áudio</option>
+                  <option value="audio">Somente áudio</option>
+                </select>
+              </div>
+              <div class="field" id="field-quality">
+                <label for="quality">Qualidade</label>
+                <select id="quality" class="input"></select>
+              </div>
+              <div class="field hidden" id="field-audio-format">
+                <label for="audio-format">Formato de áudio</label>
+                <select id="audio-format" class="input">
+                  <option value="mp3">MP3 (320 kbps)</option>
+                  <option value="m4a">M4A (AAC)</option>
+                  <option value="opus">Opus</option>
+                  <option value="wav">WAV (sem perdas)</option>
+                  <option value="flac">FLAC (sem perdas)</option>
+                </select>
+              </div>
+
+              <fieldset class="field field-wide" id="field-range">
+                <label class="check"><input type="checkbox" id="range-enabled"> Baixar só um trecho</label>
+                <div class="range-inputs hidden" id="range-inputs">
+                  <div class="field">
+                    <label for="range-start">Início</label>
+                    <input type="text" id="range-start" class="input mono" placeholder="00:00:10">
+                  </div>
+                  <div class="field">
+                    <label for="range-end">Fim</label>
+                    <input type="text" id="range-end" class="input mono" placeholder="00:01:30">
+                  </div>
+                </div>
+              </fieldset>
+
+              <div class="field-wide actions">
+                <button type="submit" class="btn btn-primary" id="btn-start-download">Baixar</button>
+              </div>
+            </form>
+
+            <div class="progress-box hidden" id="inline-progress">
+              <div class="progress-head">
+                <span id="inline-status">Na fila</span>
+                <span class="mono" id="inline-percent">0%</span>
+              </div>
+              <div class="progress"><div class="progress-fill" id="inline-bar"></div></div>
+              <div class="progress-foot">
+                <span class="muted mono" id="inline-detail"></span>
+                <button type="button" class="btn btn-link btn-sm" id="btn-cancel-inline">Cancelar</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <nav class="nav-tabs" role="tablist">
-        <button class="tab-btn active" data-tab="download-tab" id="tab-download">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          Baixar
-        </button>
-        <button class="tab-btn" data-tab="history-tab" id="tab-history">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          Histórico
-        </button>
-        <button class="tab-btn" data-tab="settings-tab" id="tab-settings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-          Configurações
-        </button>
-        <button type="button" class="btn-folder-shortcut" id="btn-open-global-folder" title="Abrir pasta de downloads no Windows Explorer">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-          <span>Abrir Pasta</span>
-        </button>
-      </nav>
-    </header>
-
-    <!-- Main Content Area -->
-    <main class="app-main">
-      <!-- Tab 1: Download & Inspeção -->
-      <section class="tab-content active" id="download-tab">
-        <div class="card search-card">
-          <!-- Seletor de Plataformas -->
-          <div class="platform-selector-group">
-            <span class="platform-selector-label">Escolha a plataforma ou use a detecção automática:</span>
-            <div class="platform-pills" id="platform-pills">
-              <button type="button" class="pill-btn active" data-platform="auto">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-                <span>Automático (+1800)</span>
-              </button>
-              <button type="button" class="pill-btn" data-platform="youtube">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
-                <span>YouTube</span>
-              </button>
-              <button type="button" class="pill-btn" data-platform="instagram">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
-                <span>Instagram (Posts/@Perfil)</span>
-              </button>
-              <button type="button" class="pill-btn" data-platform="twitter">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path></svg>
-                <span>Twitter / X (@Perfil)</span>
-              </button>
-              <button type="button" class="pill-btn" data-platform="tiktok">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"></path></svg>
-                <span>TikTok</span>
-              </button>
+      <!-- Carrossel -->
+      <div class="panel hidden" id="carousel-panel">
+        <div class="panel-head">
+          <div>
+            <div class="meta-line">
+              <span class="tag" id="carousel-platform"></span>
+              <span class="muted" id="carousel-author"></span>
+              <span class="muted" id="carousel-count"></span>
             </div>
+            <h2 class="preview-title" id="carousel-title"></h2>
           </div>
-
-          <form id="inspect-form" class="url-input-group">
-            <div class="input-wrapper">
-              <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-              <input type="text" id="url-input" placeholder="Cole a URL do vídeo/post ou digite @usuario para varrer perfil..." required autofocus autocomplete="off" />
-              <button type="button" class="btn-clear" id="btn-paste-clipboard" title="Colar da Área de Transferência">
-                Colar
-              </button>
-            </div>
-            <button type="submit" class="btn btn-primary" id="btn-inspect">
-              <span class="btn-text">Buscar</span>
-              <span class="btn-spinner hidden"></span>
-            </button>
-          </form>
-        </div>
-
-        <!-- Galeria de Perfil (Varredura de @usuario / Instagram / Twitter) -->
-        <div id="profile-container" class="profile-container hidden">
-          <!-- Card com Detalhes do Perfil -->
-          <div class="card profile-header-card">
-            <div class="profile-header-grid">
-              <div class="profile-avatar-wrapper">
-                <img id="profile-avatar" src="" alt="Avatar do Perfil" />
-              </div>
-              <div class="profile-info-content">
-                <div class="profile-title-row">
-                  <h3 id="profile-fullname">Nome do Usuário</h3>
-                  <span class="profile-username-badge" id="profile-username">@usuario</span>
-                  <span class="platform-badge" id="profile-platform-badge">Instagram</span>
-                </div>
-                <p id="profile-bio" class="profile-bio-text">Biografia do perfil...</p>
-                <div class="profile-stats-row">
-                  <span class="stat-badge"><strong id="profile-stat-posts">0</strong> posts</span>
-                  <span class="stat-badge"><strong id="profile-stat-followers">0</strong> seguidores</span>
-                </div>
-              </div>
-            </div>
-            <div class="profile-actions-bar">
-              <div class="profile-actions-left">
-                <label class="checkbox-label">
-                  <input type="checkbox" id="profile-select-all" />
-                  <span>Selecionar Todas as Mídias (<span id="profile-selected-count">0</span>)</span>
-                </label>
-              </div>
-              <div class="profile-actions-right">
-                <button type="button" class="btn btn-success" id="btn-download-selected" disabled>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                  Baixar Selecionados
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Grade de Posts / Mídias do Perfil -->
-          <div class="profile-media-grid" id="profile-media-grid">
-            <!-- Itens inseridos dinamicamente via JS -->
+          <div class="panel-actions">
+            <button type="button" class="btn btn-secondary" id="btn-carousel-selected" disabled>Baixar selecionadas (0)</button>
+            <button type="button" class="btn btn-primary" id="btn-carousel-all">Baixar todas (.zip)</button>
           </div>
         </div>
+        <p class="muted clamp-3" id="carousel-description"></p>
+        <div class="media-grid" id="carousel-grid"></div>
+      </div>
 
-        <!-- Container de Carrossel de Mídias (Posts com Múltiplas Fotos/Vídeos) -->
-        <div id="carousel-container" class="carousel-container hidden">
-          <div class="card carousel-header-card">
-            <div class="carousel-header-info">
-              <div class="carousel-badges-row">
-                <span class="platform-badge" id="carousel-platform-badge">Instagram</span>
-                <span class="carousel-author-badge" id="carousel-author">@jornitrack</span>
-                <span class="carousel-count-badge" id="carousel-total-count">5 Mídias</span>
-              </div>
-              <h3 id="carousel-title" class="carousel-post-title">Título da Publicação</h3>
-              <p id="carousel-description" class="carousel-description-text"></p>
-            </div>
-            <div class="carousel-actions-top">
-              <button type="button" class="btn btn-success btn-lg" id="btn-download-all-carousel">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                <span>Baixar Todas as Mídias</span>
-              </button>
-              <button type="button" class="btn btn-primary" id="btn-download-selected-carousel" disabled>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-                <span>Baixar Selecionadas (<span id="carousel-selected-count">0</span>)</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Grade Visual de Mídias do Carrossel -->
-          <div class="carousel-media-grid" id="carousel-media-grid">
-            <!-- Cards de mídias inseridos dinamicamente via JS -->
-          </div>
-        </div>
-
-        <!-- Preview & Configuração do Download Unitário -->
-        <div id="preview-container" class="preview-container hidden">
-          <div class="card preview-card">
-            <div class="preview-grid">
-              <!-- Thumbnail & Info -->
-              <div class="preview-media">
-                <div class="thumbnail-wrapper" id="preview-thumbnail-wrapper" title="Clique para baixar a capa">
-                  <img id="preview-thumbnail" src="" alt="Miniatura do Vídeo" />
-                  <div class="thumbnail-download-overlay" id="thumbnail-download-overlay">
-                    <div class="thumbnail-download-btn">
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                      </svg>
-                      <span>Baixar Capa</span>
-                    </div>
-                  </div>
-                  <span class="duration-badge" id="preview-duration">00:00</span>
-                  <span class="platform-badge" id="preview-platform">YouTube</span>
-                </div>
-              </div>
-
-              <!-- Detalhes & Configurações de Download -->
-              <div class="preview-details">
-                <h3 id="preview-title" class="media-title">Título do Vídeo</h3>
-                <p id="preview-author" class="media-author">Canal / Autor</p>
-
-                <form id="download-config-form">
-                  <div class="form-row">
-                    <!-- Tipo de Mídia -->
-                    <div class="form-group">
-                      <label for="media-type-select">Tipo de Extração</label>
-                      <select id="media-type-select" class="form-select">
-                        <option value="video">Vídeo com Áudio</option>
-                        <option value="audio">Apenas Áudio (Música/Podcast)</option>
-                      </select>
-                    </div>
-
-                    <!-- Resolução / Qualidade de Vídeo -->
-                    <div class="form-group" id="group-video-quality">
-                      <label for="quality-select">Qualidade do Vídeo</label>
-                      <select id="quality-select" class="form-select">
-                        <option value="best">Melhor Disponível (Automático)</option>
-                        <option value="4k">4K Ultra HD (2160p)</option>
-                        <option value="1080p">Full HD (1080p)</option>
-                        <option value="720p">HD (720p)</option>
-                        <option value="480p">SD (480p)</option>
-                      </select>
-                    </div>
-
-                    <!-- Formato de Áudio -->
-                    <div class="form-group hidden" id="group-audio-format">
-                      <label for="audio-format-select">Formato de Áudio</label>
-                      <select id="audio-format-select" class="form-select">
-                        <option value="mp3">MP3 (320kbps de Alta Fidelidade)</option>
-                        <option value="m4a">M4A (AAC nativo)</option>
-                        <option value="opus">Opus (Alta compressão)</option>
-                        <option value="wav">WAV (Sem perdas)</option>
-                        <option value="flac">FLAC (Lossless)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <!-- Seção de Corte por Intervalo (Time-Range) -->
-                  <div class="time-range-box">
-                    <div class="time-range-header">
-                      <label class="checkbox-label">
-                        <input type="checkbox" id="enable-time-range" />
-                        <span>Cortar Trecho Específico (Time-Range Download)</span>
-                      </label>
-                    </div>
-                    <div class="time-range-inputs hidden" id="time-range-fields">
-                      <div class="form-group">
-                        <label for="time-start">Início (HH:MM:SS ou Segundos):</label>
-                        <input type="text" id="time-start" class="form-input" placeholder="00:00:10" />
-                      </div>
-                      <div class="form-group">
-                        <label for="time-end">Fim (HH:MM:SS ou Segundos):</label>
-                        <input type="text" id="time-end" class="form-input" placeholder="00:01:30" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Ações de Download -->
-                  <!-- Ações de Download -->
-                  <div class="preview-actions">
-                    <button type="submit" class="btn btn-success btn-lg" id="btn-start-download">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                      Baixar Agora
-                    </button>
-                  </div>
-                </form>
-
-                <!-- Barra de Progresso Direta na Aba de Download -->
-                <div id="inline-progress-box" class="inline-progress-box hidden">
-                  <div class="inline-progress-header">
-                    <span class="inline-progress-status" id="inline-status-text">Baixando...</span>
-                    <div class="inline-progress-actions">
-                      <span class="inline-progress-percent" id="inline-percent-text">0%</span>
-                      <button type="button" id="btn-cancel-inline-download" class="btn-cancel-inline" title="Cancelar este download">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"></line>
-                          <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                        <span>Cancelar</span>
-                      </button>
-                    </div>
-                  </div>
-                  <div class="progress-container">
-                    <div class="progress-bar" id="inline-progress-bar" style="width: 0%"></div>
-                  </div>
-                  <div class="inline-progress-footer">
-                    <span id="inline-speed-text">-</span>
-                    <span id="inline-eta-text">-</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Seção Inicial de Recursos (Destaques da Home) -->
-        <div id="home-welcome-section" class="home-welcome-section">
-          <h3 class="section-title">Recursos & Plataformas Suportadas</h3>
-          <p class="section-subtitle">Selecione uma plataforma ou cole a URL diretamente no campo de busca acima.</p>
-          <div class="features-grid">
-            <!-- Card 1: YouTube -->
-            <div class="feature-card clickable-card" data-action="platform" data-platform="youtube" title="Clique para baixar do YouTube">
-              <div class="feature-card-header">
-                <div class="feature-icon-wrapper icon-yt">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
-                </div>
-                <span class="card-action-arrow">→</span>
-              </div>
-              <h4>YouTube</h4>
-              <p>Vídeos em 4K/1080p, Shorts, Playlists e extração de áudio MP3 320kbps via FFmpeg integrado.</p>
-            </div>
-
-            <!-- Card 2: Instagram -->
-            <div class="feature-card clickable-card" data-action="platform" data-platform="instagram" title="Clique para baixar do Instagram">
-              <div class="feature-card-header">
-                <div class="feature-icon-wrapper icon-ig">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path></svg>
-                </div>
-                <span class="card-action-arrow">→</span>
-              </div>
-              <h4>Instagram</h4>
-              <p>Baixe Reels, Posts e digite <code>@usuario</code> para carregar a galeria de fotos e vídeos em lote.</p>
-            </div>
-
-            <!-- Card 3: Twitter / X -->
-            <div class="feature-card clickable-card" data-action="platform" data-platform="twitter" title="Clique para baixar do Twitter / X">
-              <div class="feature-card-header">
-                <div class="feature-icon-wrapper icon-tw">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path></svg>
-                </div>
-                <span class="card-action-arrow">→</span>
-              </div>
-              <h4>Twitter / X</h4>
-              <p>Extraia vídeos com áudio de posts individuais ou varra perfis com mídias públicas.</p>
-            </div>
-
-            <!-- Card 4: TikTok -->
-            <div class="feature-card clickable-card" data-action="platform" data-platform="tiktok" title="Clique para baixar do TikTok">
-              <div class="feature-card-header">
-                <div class="feature-icon-wrapper icon-tk">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"></path></svg>
-                </div>
-                <span class="card-action-arrow">→</span>
-              </div>
-              <h4>TikTok</h4>
-              <p>Baixe vídeos em alta definição sem marca d'água de postagens ou perfis de criadores.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Tab 2: Histórico de Downloads -->
-      <section class="tab-content" id="history-tab">
-        <div class="card">
-          <div class="card-header flex-between">
+      <!-- Perfil -->
+      <div class="panel hidden" id="profile-panel">
+        <div class="panel-head">
+          <div class="profile-head">
+            <img id="profile-avatar" class="avatar" alt="">
             <div>
-              <h2>Histórico de Mídias Baixadas</h2>
-              <span class="header-hint">Acesso rápido aos arquivos gravados no disco</span>
-            </div>
-            <div class="history-controls">
-              <input type="text" id="history-search" class="form-input form-input-sm" placeholder="Buscar por título ou autor..." />
-              <select id="history-filter-platform" class="form-select form-select-sm">
-                <option value="all">Todas as Plataformas</option>
-                <option value="YouTube">YouTube</option>
-                <option value="Instagram">Instagram</option>
-                <option value="Twitter / X">Twitter / X</option>
-                <option value="TikTok">TikTok</option>
-              </select>
-              <button class="btn btn-sm btn-secondary" id="btn-refresh-history">Atualizar</button>
-            </div>
-          </div>
-
-          <div class="table-responsive">
-            <table class="data-table" id="history-table">
-              <thead>
-                <tr>
-                  <th>Mídia</th>
-                  <th>Plataforma</th>
-                  <th>Tipo / Qualidade</th>
-                  <th>Tamanho</th>
-                  <th>Data</th>
-                  <th>Status</th>
-                  <th class="text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody id="history-tbody">
-                <!-- Linhas preenchidas dinamicamente -->
-              </tbody>
-            </table>
-            <div class="empty-state hidden" id="history-empty">
-              <p>Nenhum registro encontrado no histórico.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Tab 3: Configurações -->
-      <section class="tab-content" id="settings-tab">
-        <div class="card">
-          <div class="card-header">
-            <h2>Configurações do Sistema</h2>
-            <span class="header-hint">Personalização de pastas e formatos de mídia padrão</span>
-          </div>
-
-          <form id="settings-form" class="settings-grid">
-            <div class="form-group full-width">
-              <label for="setting-download-folder">Pasta de Destino dos Downloads:</label>
-              <div class="folder-input-wrapper">
-                <input type="text" id="setting-download-folder" class="form-input" placeholder="Pasta padrão do projeto (./downloads)" />
-                <button type="button" class="btn btn-secondary" id="btn-browse-folder">
-                  Procurar Pasta...
-                </button>
+              <div class="meta-line">
+                <h2 class="preview-title" id="profile-name"></h2>
+                <span class="muted" id="profile-username"></span>
+                <span class="tag" id="profile-platform"></span>
               </div>
-              <small class="form-help">Deixe em branco ou use "./downloads" para manter portátil na pasta do projeto.</small>
+              <p class="muted clamp-2" id="profile-bio"></p>
+              <p class="muted small" id="profile-stats"></p>
             </div>
-
-            <div class="form-group">
-              <label for="setting-default-quality">Qualidade Padrão de Vídeo:</label>
-              <select id="setting-default-quality" class="form-select">
-                <option value="best">Melhor Disponível</option>
-                <option value="1080p">1080p (Full HD)</option>
-                <option value="720p">720p (HD)</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="setting-default-audio">Formato de Áudio Padrão:</label>
-              <select id="setting-default-audio" class="form-select">
-                <option value="mp3">MP3</option>
-                <option value="m4a">M4A</option>
-                <option value="flac">FLAC</option>
-              </select>
-            </div>
-
-            <!-- Seletor de Tema Visual -->
-            <div class="form-group full-width" style="margin-top: 0.5rem;">
-              <label>Tema Visual da Aplicação:</label>
-              <span class="header-hint" style="display: block; margin-bottom: 0.5rem;">Escolha o estilo de cores de sua preferência (aplicado e salvo instantaneamente):</span>
-              <div class="theme-selector-grid" id="theme-selector-grid">
-                <button type="button" class="theme-card active" data-theme-val="default">
-                  <div class="theme-preview theme-prev-default">
-                    <span class="prev-accent"></span>
-                  </div>
-                  <div class="theme-card-info">
-                    <strong>Azul Noturno</strong>
-                    <span>Padrão Escuro</span>
-                  </div>
-                </button>
-
-                <button type="button" class="theme-card" data-theme-val="gold">
-                  <div class="theme-preview theme-prev-gold">
-                    <span class="prev-accent"></span>
-                  </div>
-                  <div class="theme-card-info">
-                    <strong>Preto & Dourado</strong>
-                    <span>Gold Luxury</span>
-                  </div>
-                </button>
-
-                <button type="button" class="theme-card" data-theme-val="monochrome">
-                  <div class="theme-preview theme-prev-monochrome">
-                    <span class="prev-accent"></span>
-                  </div>
-                  <div class="theme-card-info">
-                    <strong>Preto & Cinza</strong>
-                    <span>Dark Slate Minimal</span>
-                  </div>
-                </button>
-
-                <button type="button" class="theme-card" data-theme-val="light">
-                  <div class="theme-preview theme-prev-light">
-                    <span class="prev-accent"></span>
-                  </div>
-                  <div class="theme-card-info">
-                    <strong>Claro Moderno</strong>
-                    <span>Clean Light</span>
-                  </div>
-                </button>
-
-                <button type="button" class="theme-card" data-theme-val="light-warm">
-                  <div class="theme-preview theme-prev-light-warm">
-                    <span class="prev-accent"></span>
-                  </div>
-                  <div class="theme-card-info">
-                    <strong>Claro Creme</strong>
-                    <span>Warm Sand</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <div class="form-actions full-width">
-              <button type="submit" class="btn btn-success" id="btn-save-settings">
-                Salvar Configurações
-              </button>
-            </div>
-          </form>
+          </div>
+          <div class="panel-actions">
+            <label class="check"><input type="checkbox" id="profile-select-all"> Selecionar todas</label>
+            <button type="button" class="btn btn-primary" id="btn-profile-selected" disabled>Baixar selecionadas (0)</button>
+          </div>
         </div>
-      </section>
-    </main>
-
-    <!-- Floating Active Downloads Widget (Aparece apenas quando há downloads em andamento) -->
-    <div id="floating-queue-widget" class="floating-queue-widget hidden">
-      <div class="floating-queue-header" id="floating-queue-header-btn">
-        <div class="floating-queue-title">
-          <span class="floating-pulse-dot"></span>
-          <span>Downloads Ativos</span>
-          <span class="badge-count" id="floating-queue-count">0</span>
-        </div>
-        <button type="button" class="floating-btn-toggle" id="btn-toggle-floating-queue" title="Minimizar / Expandir">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
+        <div class="media-grid" id="profile-grid"></div>
       </div>
-      <div class="floating-queue-body" id="floating-queue-list">
-        <!-- Itens ativos inseridos dinamicamente -->
+
+      <div class="empty-hint" id="download-hint">
+        <h3>Como usar</h3>
+        <ul class="plain-list">
+          <li><strong>Vídeo ou post:</strong> cole o link do YouTube, Instagram, X, TikTok e outros sites suportados pelo yt-dlp.</li>
+          <li><strong>Perfil:</strong> digite @usuario (Instagram) ou cole o link do canal/perfil para escolher várias publicações.</li>
+          <li><strong>Carrossel do Instagram:</strong> baixe as mídias uma a uma ou todas juntas em um .zip.</li>
+          <li>Os arquivos vão para a pasta definida em Configurações e também são entregues ao navegador.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================= HISTÓRICO ================= -->
+    <section class="view hidden" id="view-history" data-view="history" aria-labelledby="h-history">
+      <div class="view-head view-head-row">
+        <div>
+          <h1 id="h-history">Histórico</h1>
+          <p class="muted">Tudo que já foi baixado. As ações abrem o arquivo direto do disco.</p>
+        </div>
+        <div class="toolbar">
+          <label class="sr-only" for="history-search">Buscar</label>
+          <input type="search" id="history-search" class="input" placeholder="Buscar por título, autor ou link">
+          <label class="sr-only" for="history-platform">Plataforma</label>
+          <select id="history-platform" class="input">
+            <option value="all">Todas as plataformas</option>
+            <option value="YouTube">YouTube</option>
+            <option value="Instagram">Instagram</option>
+            <option value="Twitter / X">X / Twitter</option>
+            <option value="TikTok">TikTok</option>
+          </select>
+          <button type="button" class="btn btn-secondary" id="btn-history-refresh">Atualizar</button>
+        </div>
+      </div>
+      <div class="panel panel-flush">
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Mídia</th>
+                <th>Plataforma</th>
+                <th>Tipo</th>
+                <th class="num">Tamanho</th>
+                <th>Data</th>
+                <th>Situação</th>
+                <th class="right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+        </div>
+        <p class="empty hidden" id="history-empty">Nenhum registro encontrado.</p>
+      </div>
+    </section>
+
+    <!-- ================= FRAMES ================= -->
+    <section class="view hidden" id="view-frames" data-view="frames" aria-labelledby="h-frames">
+      <div class="view-head view-head-row">
+        <div>
+          <h1 id="h-frames">Extrair frames</h1>
+          <p class="muted">Capture quadros em resolução original, com corte para redes sociais e sequência para carrossel.</p>
+        </div>
+        <div class="toolbar">
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-shortcuts">Atalhos</button>
+          <button type="button" class="btn btn-secondary btn-sm hidden" id="btn-change-video">Trocar vídeo</button>
+        </div>
+      </div>
+
+      <label class="dropzone" id="dropzone" for="video-file">
+        <input type="file" id="video-file" class="sr-only" accept=".mp4,.mov,.mkv,.webm,.m4v,.avi,video/*">
+        <strong>Arraste um vídeo para cá ou clique para escolher</strong>
+        <span class="muted">MP4, MOV, MKV, WebM, M4V ou AVI. O processamento acontece neste computador.</span>
+        <span class="dropzone-status mono hidden" id="upload-status"></span>
+      </label>
+
+      <div class="hidden" id="frames-workspace">
+        <div class="meta-bar">
+          <span><span class="muted">Arquivo</span> <strong id="meta-filename">-</strong></span>
+          <span><span class="muted">Resolução</span> <strong class="mono" id="meta-resolution">-</strong></span>
+          <span><span class="muted">Duração</span> <strong class="mono" id="meta-duration">-</strong></span>
+          <label class="inline-field">
+            <span class="muted">FPS</span>
+            <select id="select-fps" class="input input-sm">
+              <option value="24">24</option>
+              <option value="25">25</option>
+              <option value="30">30</option>
+              <option value="60">60</option>
+              <option value="120">120</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="studio">
+          <div class="player-col">
+            <div class="player" id="player">
+              <img id="frame-view" alt="Quadro atual do vídeo">
+              <div class="crop-guide hidden" id="crop-guide"></div>
+              <div class="loupe hidden" id="loupe">
+                <canvas id="loupe-canvas" width="180" height="180"></canvas>
+                <span class="loupe-zoom mono" id="loupe-zoom">2.5x</span>
+              </div>
+            </div>
+
+            <div class="timeline">
+              <div class="timeline-head mono">
+                <span><span id="time-current">00:00:00.000</span> <span class="muted">/ <span id="time-total">00:00:00.000</span></span></span>
+                <span class="muted">Quadro <span id="frame-current">0</span> / <span id="frame-total">0</span></span>
+              </div>
+              <div class="scrubber">
+                <input type="range" id="timeline" min="0" max="100" step="0.001" value="0" aria-label="Posição no vídeo">
+                <div class="markers" id="markers"></div>
+              </div>
+              <div class="controls">
+                <div class="btn-group">
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="-1" title="Shift + seta esquerda">-1s</button>
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="-0.1" title="Alt + seta esquerda">-0,1s</button>
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-frames="-1" title="Seta esquerda">-1 quadro</button>
+                </div>
+                <button type="button" class="btn btn-primary" id="btn-play" title="Espaço">Reproduzir</button>
+                <div class="btn-group">
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-frames="1" title="Seta direita">+1 quadro</button>
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="0.1" title="Alt + seta direita">+0,1s</button>
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="1" title="Shift + seta direita">+1s</button>
+                </div>
+                <label class="inline-field">
+                  <span class="muted">Velocidade</span>
+                  <select id="select-rate" class="input input-sm">
+                    <option value="0.25">0,25x</option>
+                    <option value="0.5">0,5x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="2">2x</option>
+                  </select>
+                </label>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-loupe" aria-pressed="false" title="Tecla Z">Lupa</button>
+              </div>
+            </div>
+          </div>
+
+          <aside class="side-col">
+            <div class="panel">
+              <h3 class="panel-title">Captura</h3>
+              <div class="field">
+                <label for="select-format">Formato</label>
+                <select id="select-format" class="input">
+                  <option value="png">PNG (sem perdas)</option>
+                  <option value="jpeg">JPEG (arquivo menor)</option>
+                  <option value="webp">WebP (mais compacto)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="select-aspect">Proporção</label>
+                <select id="select-aspect" class="input">
+                  <option value="original">Original do vídeo</option>
+                  <option value="16:9">16:9 (capa, paisagem)</option>
+                  <option value="9:16">9:16 (Reels, Stories, TikTok)</option>
+                  <option value="1:1">1:1 (feed quadrado)</option>
+                  <option value="4:5">4:5 (feed retrato)</option>
+                </select>
+                <small class="muted">O corte é centralizado e mantém a resolução máxima.</small>
+              </div>
+              <button type="button" class="btn btn-primary btn-block" id="btn-capture">Capturar quadro <kbd>C</kbd></button>
+            </div>
+
+            <div class="panel">
+              <h3 class="panel-title">Sequência para carrossel</h3>
+              <p class="muted small">Marque o início e o fim do trecho e extraia várias fotos de uma vez.</p>
+              <div class="burst-points">
+                <div>
+                  <span class="muted small">Início</span>
+                  <strong class="mono" id="burst-start">00:00.0</strong>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-burst-start">Marcar <kbd>I</kbd></button>
+                </div>
+                <div>
+                  <span class="muted small">Fim</span>
+                  <strong class="mono" id="burst-end">00:00.0</strong>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-burst-end">Marcar <kbd>O</kbd></button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="select-burst-count">Quantidade de fotos</label>
+                <select id="select-burst-count" class="input">
+                  <option value="4">4</option>
+                  <option value="6" selected>6</option>
+                  <option value="8">8</option>
+                  <option value="10">10</option>
+                  <option value="12">12</option>
+                </select>
+              </div>
+              <button type="button" class="btn btn-secondary btn-block" id="btn-burst">Extrair sequência <kbd>B</kbd></button>
+            </div>
+
+            <div class="panel">
+              <h3 class="panel-title">Sugestões automáticas</h3>
+              <p class="muted small">Gera miniaturas espalhadas pelo vídeo para achar os melhores ângulos.</p>
+              <div class="field">
+                <label for="select-sample-count">Quantidade</label>
+                <select id="select-sample-count" class="input">
+                  <option value="6">6</option>
+                  <option value="12" selected>12</option>
+                  <option value="18">18</option>
+                  <option value="24">24</option>
+                  <option value="36">36</option>
+                </select>
+              </div>
+              <button type="button" class="btn btn-secondary btn-block" id="btn-samples">Gerar sugestões</button>
+            </div>
+          </aside>
+        </div>
+
+        <section class="panel hidden" id="samples-panel">
+          <div class="panel-head">
+            <div>
+              <h3 class="panel-title">Sugestões</h3>
+              <p class="muted small">Clique numa miniatura para ir até o momento. Use "Adicionar" para capturar em resolução original.</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-samples-add-all">Adicionar todas à galeria</button>
+          </div>
+          <div class="thumb-grid" id="samples-grid"></div>
+        </section>
+
+        <section class="panel" id="gallery-panel">
+          <div class="panel-head">
+            <div>
+              <h3 class="panel-title">Galeria <span class="count" id="gallery-count">0</span></h3>
+              <p class="muted small">Quadros capturados, prontos para baixar.</p>
+            </div>
+            <div class="panel-actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-gallery-clear" disabled>Limpar</button>
+              <button type="button" class="btn btn-primary btn-sm" id="btn-gallery-zip" disabled>Baixar todas (.zip)</button>
+            </div>
+          </div>
+          <p class="empty" id="gallery-empty">Nenhum quadro capturado. Posicione o vídeo e pressione C.</p>
+          <div class="thumb-grid hidden" id="gallery-grid"></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ================= CONFIGURAÇÕES ================= -->
+    <section class="view hidden" id="view-settings" data-view="settings" aria-labelledby="h-settings">
+      <div class="view-head">
+        <h1 id="h-settings">Configurações</h1>
+        <p class="muted">Preferências salvas neste computador.</p>
+      </div>
+      <form class="panel form-grid settings" id="settings-form">
+        <div class="field field-wide">
+          <label for="setting-folder">Pasta dos downloads</label>
+          <div class="search-row">
+            <input type="text" id="setting-folder" class="input" placeholder="Pasta padrão do projeto (downloads)">
+            <button type="button" class="btn btn-secondary" id="btn-choose-folder">Escolher...</button>
+          </div>
+          <small class="muted">Deixe vazio para usar a pasta "downloads" do projeto. Pastas do sistema não são aceitas.</small>
+        </div>
+        <div class="field">
+          <label for="setting-quality">Qualidade padrão de vídeo</label>
+          <select id="setting-quality" class="input">
+            <option value="best">Melhor disponível</option>
+            <option value="4k">4K (2160p)</option>
+            <option value="1080p">1080p</option>
+            <option value="720p">720p</option>
+            <option value="480p">480p</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="setting-audio">Formato padrão de áudio</label>
+          <select id="setting-audio" class="input">
+            <option value="mp3">MP3</option>
+            <option value="m4a">M4A</option>
+            <option value="opus">Opus</option>
+            <option value="wav">WAV</option>
+            <option value="flac">FLAC</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="setting-theme">Tema</label>
+          <select id="setting-theme" class="input">
+            <option value="system">Igual ao sistema</option>
+            <option value="light">Claro</option>
+            <option value="dark">Escuro</option>
+          </select>
+        </div>
+        <div class="field-wide actions">
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <!-- Fila de downloads ativos -->
+  <aside class="queue hidden" id="queue" aria-live="polite">
+    <button type="button" class="queue-head" id="queue-toggle" aria-expanded="true">
+      <span>Downloads em andamento</span>
+      <span class="count" id="queue-count">0</span>
+    </button>
+    <div class="queue-list" id="queue-list"></div>
+  </aside>
+
+  <!-- Modal de visualização de quadro -->
+  <div class="modal hidden" id="frame-modal" role="dialog" aria-modal="true" aria-labelledby="frame-modal-title">
+    <div class="modal-box modal-wide">
+      <div class="modal-head">
+        <div>
+          <h3 id="frame-modal-title">Quadro</h3>
+          <span class="muted small mono" id="frame-modal-info"></span>
+        </div>
+        <div class="panel-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="frame-modal-download">Baixar</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-close-modal>Fechar</button>
+        </div>
+      </div>
+      <div class="modal-body modal-image">
+        <img id="frame-modal-img" alt="Quadro em resolução original">
       </div>
     </div>
-
-    <!-- Toast Notifications Container -->
-    <div id="toast-container" class="toast-container"></div>
   </div>
 
-  <script type="module" src="./src/main.js"></script>
+  <!-- Modal de atalhos -->
+  <div class="modal hidden" id="shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="shortcuts-title">Atalhos do extrator</h3>
+        <button type="button" class="btn btn-ghost btn-sm" data-close-modal>Fechar</button>
+      </div>
+      <div class="modal-body">
+        <table class="table table-compact">
+          <tbody>
+            <tr><td>Reproduzir / pausar</td><td class="right"><kbd>Espaço</kbd> ou <kbd>K</kbd></td></tr>
+            <tr><td>Capturar quadro</td><td class="right"><kbd>C</kbd></td></tr>
+            <tr><td>Quadro anterior / próximo</td><td class="right"><kbd>&larr;</kbd> <kbd>&rarr;</kbd></td></tr>
+            <tr><td>Voltar / avançar 0,1 s</td><td class="right"><kbd>Alt</kbd> + <kbd>&larr;</kbd> <kbd>&rarr;</kbd></td></tr>
+            <tr><td>Voltar / avançar 1 s</td><td class="right"><kbd>Shift</kbd> + <kbd>&larr;</kbd> <kbd>&rarr;</kbd></td></tr>
+            <tr><td>Marcar início / fim da sequência</td><td class="right"><kbd>I</kbd> <kbd>O</kbd></td></tr>
+            <tr><td>Extrair sequência</td><td class="right"><kbd>B</kbd></td></tr>
+            <tr><td>Lupa de foco (roda do mouse muda o zoom)</td><td class="right"><kbd>Z</kbd></td></tr>
+            <tr><td>Fechar janelas</td><td class="right"><kbd>Esc</kbd></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
 </body>
 </html>

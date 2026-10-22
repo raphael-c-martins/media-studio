@@ -1,2 +1,4 @@
-# Auto detect text files and perform LF normalization
+# Normaliza fim de linha de texto
 * text=auto
+*.bat eol=crlf
+*.ps1 eol=crlf
