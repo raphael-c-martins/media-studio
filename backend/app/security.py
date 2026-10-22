@@ -88,4 +88,7 @@ class LocalAccessMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
         apply_security_headers(response)
+        if not request.url.path.startswith("/api/"):
+            # A interface é pequena e muda a cada versão: o navegador revalida em vez de usar cópia velha.
+            response.headers["Cache-Control"] = "no-cache"
         return response

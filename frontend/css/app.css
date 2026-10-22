@@ -62,15 +62,6 @@ h3 { font-size: 15px; }
 p { margin: 0; }
 a { color: var(--accent); }
 img { max-width: 100%; display: block; }
-kbd {
-  font: 11px/1 var(--mono);
-  padding: 2px 5px;
-  border: 1px solid var(--border-strong);
-  border-bottom-width: 2px;
-  border-radius: 3px;
-  background: var(--surface-2);
-  color: var(--text);
-}
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .hidden { display: none !important; }
@@ -151,8 +142,6 @@ kbd {
 .btn-link { background: none; border: none; color: var(--muted); padding: 0; height: auto; text-decoration: underline; }
 .btn-link:hover { color: var(--danger); }
 .btn.is-done { border-color: var(--success); color: var(--success); }
-.btn kbd { margin-left: 2px; }
-.btn-primary kbd { background: transparent; color: inherit; border-color: currentColor; opacity: .8; }
 .btn-group { display: inline-flex; }
 .btn-group .btn { border-radius: 0; margin-left: -1px; }
 .btn-group .btn:first-child { border-radius: var(--radius) 0 0 var(--radius); margin-left: 0; }
@@ -245,7 +234,6 @@ select.input { padding-right: 6px; }
 .table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .table tbody tr:hover { background: var(--surface-2); }
 .table tbody tr:last-child td { border-bottom: none; }
-.table-compact td { padding: 8px 4px; }
 .table td.num, .table td.mono { white-space: nowrap; }
 .cell-title { font-weight: 600; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }

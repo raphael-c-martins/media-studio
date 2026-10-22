@@ -227,7 +227,6 @@
           <p class="muted">Capture quadros em resolução original, com corte para redes sociais e sequência para carrossel.</p>
         </div>
         <div class="toolbar">
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-shortcuts">Atalhos</button>
           <button type="button" class="btn btn-secondary btn-sm hidden" id="btn-change-video">Trocar vídeo</button>
         </div>
       </div>
@@ -278,15 +277,15 @@
               </div>
               <div class="controls">
                 <div class="btn-group">
-                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="-1" title="Shift + seta esquerda">-1s</button>
-                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="-0.1" title="Alt + seta esquerda">-0,1s</button>
-                  <button type="button" class="btn btn-secondary btn-sm mono" data-frames="-1" title="Seta esquerda">-1 quadro</button>
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="-1">-1s</button>
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="-0.1">-0,1s</button>
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-frames="-1" title="Seta para a esquerda">-1 quadro</button>
                 </div>
                 <button type="button" class="btn btn-primary" id="btn-play" title="Espaço">Reproduzir</button>
                 <div class="btn-group">
-                  <button type="button" class="btn btn-secondary btn-sm mono" data-frames="1" title="Seta direita">+1 quadro</button>
-                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="0.1" title="Alt + seta direita">+0,1s</button>
-                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="1" title="Shift + seta direita">+1s</button>
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-frames="1" title="Seta para a direita">+1 quadro</button>
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="0.1">+0,1s</button>
+                  <button type="button" class="btn btn-secondary btn-sm mono" data-step="1">+1s</button>
                 </div>
                 <label class="inline-field">
                   <span class="muted">Velocidade</span>
@@ -297,7 +296,7 @@
                     <option value="2">2x</option>
                   </select>
                 </label>
-                <button type="button" class="btn btn-secondary btn-sm" id="btn-loupe" aria-pressed="false" title="Tecla Z">Lupa</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-loupe" aria-pressed="false">Lupa</button>
               </div>
             </div>
           </div>
@@ -324,7 +323,7 @@
                 </select>
                 <small class="muted">O corte é centralizado e mantém a resolução máxima.</small>
               </div>
-              <button type="button" class="btn btn-primary btn-block" id="btn-capture">Capturar quadro <kbd>C</kbd></button>
+              <button type="button" class="btn btn-primary btn-block" id="btn-capture">Capturar quadro</button>
             </div>
 
             <div class="panel">
@@ -334,12 +333,12 @@
                 <div>
                   <span class="muted small">Início</span>
                   <strong class="mono" id="burst-start">00:00.0</strong>
-                  <button type="button" class="btn btn-secondary btn-sm" id="btn-burst-start">Marcar <kbd>I</kbd></button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-burst-start">Marcar</button>
                 </div>
                 <div>
                   <span class="muted small">Fim</span>
                   <strong class="mono" id="burst-end">00:00.0</strong>
-                  <button type="button" class="btn btn-secondary btn-sm" id="btn-burst-end">Marcar <kbd>O</kbd></button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-burst-end">Marcar</button>
                 </div>
               </div>
               <div class="field">
@@ -352,7 +351,7 @@
                   <option value="12">12</option>
                 </select>
               </div>
-              <button type="button" class="btn btn-secondary btn-block" id="btn-burst">Extrair sequência <kbd>B</kbd></button>
+              <button type="button" class="btn btn-secondary btn-block" id="btn-burst">Extrair sequência</button>
             </div>
 
             <div class="panel">
@@ -395,7 +394,7 @@
               <button type="button" class="btn btn-primary btn-sm" id="btn-gallery-zip" disabled>Baixar todas (.zip)</button>
             </div>
           </div>
-          <p class="empty" id="gallery-empty">Nenhum quadro capturado. Posicione o vídeo e pressione C.</p>
+          <p class="empty" id="gallery-empty">Nenhum quadro capturado ainda.</p>
           <div class="thumb-grid hidden" id="gallery-grid"></div>
         </section>
       </div>
@@ -475,31 +474,6 @@
       </div>
       <div class="modal-body modal-image">
         <img id="frame-modal-img" alt="Quadro em resolução original">
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal de atalhos -->
-  <div class="modal hidden" id="shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
-    <div class="modal-box">
-      <div class="modal-head">
-        <h3 id="shortcuts-title">Atalhos do extrator</h3>
-        <button type="button" class="btn btn-ghost btn-sm" data-close-modal>Fechar</button>
-      </div>
-      <div class="modal-body">
-        <table class="table table-compact">
-          <tbody>
-            <tr><td>Reproduzir / pausar</td><td class="right"><kbd>Espaço</kbd> ou <kbd>K</kbd></td></tr>
-            <tr><td>Capturar quadro</td><td class="right"><kbd>C</kbd></td></tr>
-            <tr><td>Quadro anterior / próximo</td><td class="right"><kbd>&larr;</kbd> <kbd>&rarr;</kbd></td></tr>
-            <tr><td>Voltar / avançar 0,1 s</td><td class="right"><kbd>Alt</kbd> + <kbd>&larr;</kbd> <kbd>&rarr;</kbd></td></tr>
-            <tr><td>Voltar / avançar 1 s</td><td class="right"><kbd>Shift</kbd> + <kbd>&larr;</kbd> <kbd>&rarr;</kbd></td></tr>
-            <tr><td>Marcar início / fim da sequência</td><td class="right"><kbd>I</kbd> <kbd>O</kbd></td></tr>
-            <tr><td>Extrair sequência</td><td class="right"><kbd>B</kbd></td></tr>
-            <tr><td>Lupa de foco (roda do mouse muda o zoom)</td><td class="right"><kbd>Z</kbd></td></tr>
-            <tr><td>Fechar janelas</td><td class="right"><kbd>Esc</kbd></td></tr>
-          </tbody>
-        </table>
       </div>
     </div>
   </div>

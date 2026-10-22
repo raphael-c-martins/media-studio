@@ -339,10 +339,6 @@ function drawLoupe(event) {
 
 // ---------------------------------------------------------------- modais
 
-function openModal(id) {
-  show($(id), true);
-}
-
 function closeModals() {
   $$('.modal').forEach((modal) => show(modal, false));
 }
@@ -398,16 +394,13 @@ export function initFrames() {
     $('#loupe-zoom').textContent = `${state.loupeZoom.toFixed(1)}x`;
   }, { passive: false });
 
-  $('#btn-shortcuts').addEventListener('click', () => openModal('#shortcuts-modal'));
   $$('[data-close-modal]').forEach((b) => b.addEventListener('click', closeModals));
   $$('.modal').forEach((modal) => modal.addEventListener('click', (e) => { if (e.target === modal) closeModals(); }));
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModals(); });
 
   initShortcuts({
-    togglePlay, capture, toggleLoupe, markStart, markEnd, burst,
-    step: (seconds) => seek(state.time + seconds),
+    togglePlay,
     stepFrames: (frames) => seek(state.time + frames / state.fps),
-    showHelp: () => openModal('#shortcuts-modal'),
   }, () => state.active && Boolean(state.video) && $('.modal:not(.hidden)') === null);
 
   // Libera o arquivo temporário no servidor ao fechar a aba.

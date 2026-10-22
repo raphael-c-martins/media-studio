@@ -19,6 +19,12 @@ Registro das decisões do projeto. O histórico completo de cada ferramenta ante
 
 ## Linha do tempo
 
+### [22/10/2026] - Atalhos do extrator reduzidos ao básico
+
+- **Por quê:** a regra de "One-Hand Workflow" saiu das diretrizes globais; os atalhos extras quase não eram usados e poluíam a tela com etiquetas de tecla.
+- **Ficou:** espaço reproduz/pausa, setas andam um quadro e Esc fecha janelas.
+- **Saiu:** botão e janela de Atalhos, teclas C, I, O, B, Z, K e ?, combinações Alt/Shift + setas e as etiquetas de tecla nos botões. Todas as funções continuam nos botões da tela.
+
 ### [22/10/2026] - União do MediaDownloader Pro e do FrameStudio no Media Studio (v2.0.0)
 
 **Por quê:** as duas ferramentas eram usadas juntas para o Relíquias (baixar o vídeo e depois tirar frames), mas rodavam separadas, com portas, estilos e manutenção duplicados. Uma auditoria também encontrou falhas de segurança importantes no MediaDownloader.
