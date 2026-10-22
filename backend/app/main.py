@@ -1,85 +1,93 @@
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
+from logging.handlers import RotatingFileHandler
+
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from app.config import LOGS_DIR, CORS_ORIGINS
-from app.database import init_db
-from app.services.queue_manager import queue_manager
-from app.api.routes_health import router as health_router
-from app.api.routes_info import router as info_router
-from app.api.routes_download import router as download_router
-from app.api.routes_history import router as history_router
-from app.api.routes_ai import router as ai_router
-from app.api.routes_settings import router as settings_router
-from app.api.routes_profile import router as profile_router
+from app import config
+from app.database import init_db, recover_interrupted_downloads
+from app.downloads import routes_download, routes_history, routes_info, routes_profile, routes_settings
+from app.downloads.queue_manager import queue_manager
+from app.frames import routes as frames_routes
+from app.frames.registry import clear_cache_dir, registry
+from app.routes_health import router as health_router
+from app.security import LocalAccessMiddleware
 
-# Configuração de Logging Persistente
-log_file = LOGS_DIR / "backend.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        logging.FileHandler(log_file, encoding="utf-8"),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger("media_downloader.main")
+logger = logging.getLogger("media_studio.main")
+
+
+def configure_logging() -> None:
+    root = logging.getLogger()
+    if any(getattr(h, "_media_studio", False) for h in root.handlers):
+        return
+    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    file_handler = RotatingFileHandler(
+        config.LOGS_DIR / "media-studio.log", maxBytes=5 * 1024 * 1024, backupCount=5, encoding="utf-8"
+    )
+    console_handler = logging.StreamHandler(sys.stdout)
+    for handler in (file_handler, console_handler):
+        handler.setFormatter(formatter)
+        handler._media_studio = True
+        root.addHandler(handler)
+    root.setLevel(logging.INFO)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Ciclo de vida do servidor (inicialização e encerramento)."""
-    logger.info("Iniciando MediaDownloader Pro API...")
+    config.validate_runtime()
+    config.ensure_dirs()
+    configure_logging()
+    logger.info("Iniciando Media Studio %s", config.APP_VERSION)
+
     await init_db()
+    interrupted = await recover_interrupted_downloads()
+    if interrupted:
+        logger.info("Downloads interrompidos na última execução marcados como erro: %s", interrupted)
+    removed = clear_cache_dir()
+    if removed:
+        logger.info("Vídeos temporários antigos removidos: %s", removed)
+
     await queue_manager.start()
-    yield
-    logger.info("Encerrando MediaDownloader Pro API...")
-    await queue_manager.stop()
+    cleanup_task = asyncio.create_task(frames_routes.cleanup_loop())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        await queue_manager.stop()
+        registry.clear()
+        logger.info("Media Studio encerrado.")
 
-app = FastAPI(
-    title="MediaDownloader Pro API",
-    description="API assíncrona de alta performance para download e processamento de mídias online",
-    version="1.0.0",
-    lifespan=lifespan
-)
 
-# CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="Media Studio", version=config.APP_VERSION, lifespan=lifespan)
+app.add_middleware(LocalAccessMiddleware)
 
-# Tratamento global de exceções
+
+@app.exception_handler(RequestValidationError)
+async def validation_handler(request: Request, exc: RequestValidationError):
+    messages = []
+    for error in exc.errors():
+        text = str(error.get("msg", "Valor inválido")).removeprefix("Value error, ")
+        messages.append(text)
+    return JSONResponse(status_code=422, content={"detail": " ".join(messages) or "Dados inválidos."})
+
+
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Erro não tratado na rota {request.url.path}: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"success": False, "detail": "Ocorreu um erro interno no servidor.", "error": str(exc)}
-    )
+async def unhandled_handler(request: Request, exc: Exception):
+    logger.error("Erro não tratado em %s: %s", request.url.path, exc, exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "Erro interno no servidor. Veja logs/media-studio.log."})
 
-# Registrar Rotas
+
 app.include_router(health_router)
-app.include_router(info_router)
-app.include_router(download_router)
-app.include_router(history_router)
-app.include_router(ai_router)
-app.include_router(settings_router)
-app.include_router(profile_router)
+app.include_router(routes_info.router)
+app.include_router(routes_download.router)
+app.include_router(routes_history.router)
+app.include_router(routes_settings.router)
+app.include_router(routes_profile.router)
+app.include_router(frames_routes.router)
 
-@app.get("/")
-async def root():
-    return {
-        "message": "MediaDownloader Pro API Operante",
-        "documentation": "/docs",
-        "health": "/health"
-    }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8800, reload=True)
+app.mount("/", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="frontend")

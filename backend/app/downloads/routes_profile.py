@@ -1,28 +1,28 @@
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
-from typing import Optional
+from typing import Literal
 
-from app.services.profile_scanner import scan_profile, ProfileScanResponse
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
-router = APIRouter(prefix="/api/profile", tags=["Profile Scanner"])
+from app.downloads.profile_scanner import ProfileScanResponse, scan_profile
+from app.net_guard import UnsafeUrlError, assert_public_url
+
+router = APIRouter(prefix="/api/profile", tags=["Profile"])
+
 
 class ProfileScanRequest(BaseModel):
-    target: str
-    platform: Optional[str] = "auto"
-    limit: Optional[int] = 18
+    target: str = Field(..., min_length=1, max_length=300)
+    platform: Literal["auto", "youtube", "instagram", "twitter", "tiktok"] = "auto"
+    limit: int = Field(18, ge=1, le=48)
+
 
 @router.post("/scan", response_model=ProfileScanResponse)
 async def scan_profile_endpoint(req: ProfileScanRequest):
-    """Varre um perfil público (Instagram, Twitter/X, YouTube ou TikTok) e retorna galeria de mídias."""
-    if not req.target or not req.target.strip():
-        raise HTTPException(status_code=400, detail="Informe um nome de usuário (@usuario) ou link do perfil.")
-
+    target = req.target.strip()
     try:
-        data = await scan_profile(
-            target=req.target.strip(),
-            platform=req.platform or "auto",
-            limit=req.limit or 18
-        )
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erro ao varrer perfil: {str(e)}")
+        if target.lower().startswith(("http://", "https://")):
+            await assert_public_url(target)
+        return await scan_profile(target=target, platform=req.platform, limit=req.limit)
+    except UnsafeUrlError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Erro ao carregar o perfil: {exc}") from exc

@@ -3,243 +3,172 @@ import logging
 import re
 import zipfile
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Awaitable, Callable, List, Optional
+
 import httpx
 import instaloader
 
-from app.models import MediaInfoResponse, FormatOption, CarouselMediaItem
+from app import config
+from app.downloads.models import CarouselMediaItem, FormatOption, MediaInfoResponse
+from app.downloads.storage import safe_filename, unique_path
+from app.net_guard import BROWSER_HEADERS, download_public_file
 
-logger = logging.getLogger("media_downloader.instagram_helper")
+logger = logging.getLogger("media_studio.instagram")
+
+ProgressCallback = Callable[[float, str], Awaitable[None]]
+
 
 def extract_shortcode(url: str) -> Optional[str]:
-    """Extrai o shortcode de uma URL de post/reels do Instagram."""
-    m = re.search(r"instagram\.com/(?:p|reel|tv)/([a-zA-Z0-9_\-]+)", url)
-    if m:
-        return m.group(1)
-    return None
+    match = re.search(r"instagram\.com/(?:p|reel|tv)/([a-zA-Z0-9_\-]+)", url)
+    return match.group(1) if match else None
+
+
+def _new_loader() -> instaloader.Instaloader:
+    loader = instaloader.Instaloader(
+        download_pictures=False,
+        download_videos=False,
+        download_video_thumbnails=False,
+        save_metadata=False,
+        compress_json=False,
+        max_connection_attempts=1,
+        sleep=False,
+        quiet=True,
+    )
+    loader.context.user_agent = BROWSER_HEADERS["User-Agent"]
+    return loader
+
 
 async def extract_instagram_post_info(url: str) -> Optional[MediaInfoResponse]:
-    """Extrai metadados completos de posts de fotos, vídeos e carrosséis do Instagram."""
     shortcode = extract_shortcode(url)
     if not shortcode:
         return None
 
-    def _get_post_and_nodes():
-        L = instaloader.Instaloader(
-            download_pictures=False,
-            download_videos=False,
-            download_video_thumbnails=False,
-            save_metadata=False,
-            compress_json=False,
-            max_connection_attempts=1,
-            sleep=False,
-            quiet=True
-        )
-        L.context.user_agent = (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        )
+    def _load():
         try:
-            post = instaloader.Post.from_shortcode(L.context, shortcode)
-            raw_nodes = []
-            if post.mediacount > 1:
-                for idx, node in enumerate(post.get_sidecar_nodes()):
-                    raw_nodes.append({
-                        "index": idx + 1,
-                        "media_type": "video" if node.is_video else "image",
-                        "thumbnail": node.display_url,
-                        "download_url": node.video_url if node.is_video else node.display_url
-                    })
-            return post, raw_nodes
-        except Exception as e:
-            logger.warning(f"Instaloader falhou para shortcode {shortcode}: {e}")
+            post = instaloader.Post.from_shortcode(_new_loader().context, shortcode)
+        except Exception as exc:
+            logger.warning("Instaloader falhou para %s: %s", shortcode, exc)
             return None, []
+        nodes = []
+        if post.mediacount > 1:
+            for idx, node in enumerate(post.get_sidecar_nodes(), start=1):
+                nodes.append({
+                    "index": idx,
+                    "media_type": "video" if node.is_video else "image",
+                    "thumbnail": node.display_url,
+                    "download_url": node.video_url if node.is_video else node.display_url,
+                })
+        return post, nodes
 
-    post, raw_nodes = await asyncio.to_thread(_get_post_and_nodes)
+    post, nodes = await asyncio.to_thread(_load)
     if not post:
         return None
 
     caption = post.caption or "Publicação do Instagram"
-    title = caption[:80].strip() if len(caption) > 80 else caption
-    title = title.replace("\n", " ").strip() or f"Instagram Post [{shortcode}]"
-    
+    title = caption.replace("\n", " ").strip()[:80] or f"Instagram {shortcode}"
     author = post.owner_username or "Instagram"
-    thumbnail = post.url
-    is_video = post.is_video
-    mediacount = post.mediacount
-
     formats: List[FormatOption] = []
     carousel_items: List[CarouselMediaItem] = []
-    
-    if is_video:
-        media_type = "video"
-        formats.append(
-            FormatOption(
-                format_id="best",
-                ext="mp4",
-                resolution="Original HD (Vídeo MP4)",
-                vcodec="h264",
-                acodec="aac",
-                has_video=True,
-                has_audio=True
-            )
-        )
-    elif mediacount > 1:
-        media_type = "carousel"
-        for n in raw_nodes:
-            carousel_items.append(
-                CarouselMediaItem(
-                    index=n["index"],
-                    media_type=n["media_type"],
-                    url=f"https://www.instagram.com/p/{shortcode}/?img_index={n['index']}",
-                    thumbnail=n["thumbnail"],
-                    download_url=n["download_url"],
-                    caption=f"Mídia #{n['index']}"
-                )
-            )
 
-        formats.append(
-            FormatOption(
-                format_id="carousel_all",
-                ext="jpg/mp4",
-                resolution=f"Carrossel Completo ({mediacount} Mídias)",
-                has_video=False,
-                has_audio=False
-            )
-        )
-        formats.append(
-            FormatOption(
-                format_id="photo_cover",
-                ext="jpg",
-                resolution="Capa Principal (Foto HD)",
-                has_video=False,
-                has_audio=False
-            )
-        )
+    if post.is_video:
+        media_type = "video"
+        formats.append(FormatOption(format_id="best", ext="mp4", resolution="Vídeo original (MP4)",
+                                    vcodec="h264", acodec="aac"))
+    elif post.mediacount > 1:
+        media_type = "carousel"
+        for node in nodes:
+            carousel_items.append(CarouselMediaItem(
+                index=node["index"],
+                media_type=node["media_type"],
+                url=f"https://www.instagram.com/p/{shortcode}/?img_index={node['index']}",
+                thumbnail=node["thumbnail"],
+                download_url=node["download_url"],
+                caption=f"Mídia {node['index']}",
+            ))
+        formats.append(FormatOption(format_id="carousel_all", ext="zip",
+                                    resolution=f"Carrossel completo ({post.mediacount} mídias)",
+                                    has_video=False, has_audio=False))
     else:
         media_type = "image"
-        formats.append(
-            FormatOption(
-                format_id="photo_hd",
-                ext="jpg",
-                resolution="Foto Original HD (JPG)",
-                has_video=False,
-                has_audio=False
-            )
-        )
+        formats.append(FormatOption(format_id="photo_hd", ext="jpg", resolution="Foto original (JPG)",
+                                    has_video=False, has_audio=False))
 
+    duration = int(post.video_duration or 0) if post.is_video else 0
     return MediaInfoResponse(
         url=f"https://www.instagram.com/p/{shortcode}/",
         id=shortcode,
         title=title,
         author=author,
         channel_url=f"https://www.instagram.com/{author}/",
-        duration=int(post.video_duration or 0) if is_video else 0,
-        duration_string=f"{int(post.video_duration)}s" if is_video and post.video_duration else None,
-        thumbnail=thumbnail,
+        duration=duration,
+        duration_string=f"{duration}s" if duration else None,
+        thumbnail=post.url,
         description=caption,
         platform="Instagram",
         formats=formats,
-        is_live=False,
         media_type=media_type,
-        is_carousel=mediacount > 1,
-        carousel_items=carousel_items
+        is_carousel=post.mediacount > 1,
+        carousel_items=carousel_items,
     )
+
 
 async def download_instagram_media_direct(
     url: str,
     target_folder: Path,
     custom_title: Optional[str] = None,
-    progress_callback = None
+    progress_callback: Optional[ProgressCallback] = None,
 ) -> str:
-    """Baixa fotos, vídeos ou carrosséis do Instagram diretamente e salva na pasta de destino."""
+    """Baixa foto, vídeo ou carrossel. No carrossel completo, os arquivos soltos ficam na pasta e um .zip
+    com todos é devolvido para o navegador."""
     shortcode = extract_shortcode(url)
     if not shortcode:
         raise ValueError("URL de post do Instagram inválida.")
 
-    # Verificar se a URL aponta para um item específico de carrossel (?img_index=N)
-    target_index: Optional[int] = None
-    m_idx = re.search(r"[?&]img_index=(\d+)", url)
-    if m_idx:
-        try:
-            target_index = int(m_idx.group(1))
-        except ValueError:
-            target_index = None
+    index_match = re.search(r"[?&]img_index=(\d+)", url)
+    target_index = int(index_match.group(1)) if index_match else None
 
-    def _get_nodes():
-        L = instaloader.Instaloader(quiet=True, max_connection_attempts=1, sleep=False)
-        post = instaloader.Post.from_shortcode(L.context, shortcode)
+    def _collect():
+        post = instaloader.Post.from_shortcode(_new_loader().context, shortcode)
         if post.mediacount > 1:
-            all_nodes = list(post.get_sidecar_nodes())
-            
-            # Se for requisitado um índice específico, pega estritamente aquele item!
-            if target_index is not None and 1 <= target_index <= len(all_nodes):
-                n = all_nodes[target_index - 1]
-                m_url = n.video_url if n.is_video else n.display_url
-                ext = "mp4" if n.is_video else "jpg"
-                return post, [(m_url, ext)], True
-            
-            # Caso contrário (Baixar Todas as Mídias), pega todos os nós
-            items = []
-            for n in all_nodes:
-                items.append((n.video_url if n.is_video else n.display_url, "mp4" if n.is_video else "jpg"))
-            return post, items, False
-        else:
-            media_url = post.video_url if post.is_video else post.url
-            ext = "mp4" if post.is_video else "jpg"
-            return post, [(media_url, ext)], True
+            nodes = list(post.get_sidecar_nodes())
+            if target_index is not None and 1 <= target_index <= len(nodes):
+                node = nodes[target_index - 1]
+                return post, [(node.video_url if node.is_video else node.display_url,
+                               "mp4" if node.is_video else "jpg")]
+            return post, [(n.video_url if n.is_video else n.display_url, "mp4" if n.is_video else "jpg")
+                          for n in nodes]
+        return post, [(post.video_url if post.is_video else post.url, "mp4" if post.is_video else "jpg")]
 
-    post, media_items, is_single_item = await asyncio.to_thread(_get_nodes)
-    safe_title = re.sub(r'[\\/*?:"<>|]', "", custom_title or post.owner_username + "_" + shortcode).strip()
+    post, media_items = await asyncio.to_thread(_collect)
+    stem = safe_filename(custom_title or f"{post.owner_username}_{shortcode}")
+    total = len(media_items)
+    saved: List[Path] = []
 
-    downloaded_paths = []
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    }
-
-    async with httpx.AsyncClient(timeout=45.0, follow_redirects=True, headers=headers) as client:
-        total = len(media_items)
-        for i, (m_url, ext) in enumerate(media_items):
-            if is_single_item or total == 1:
-                file_name = f"{safe_title}.{ext}"
-            else:
-                file_name = f"{safe_title}_{i+1}.{ext}"
-            
-            file_path = target_folder / file_name
-
-            resp = await client.get(m_url)
-            if resp.status_code == 200:
-                file_path.write_bytes(resp.content)
-                downloaded_paths.append(str(file_path))
-
+    async with httpx.AsyncClient(timeout=60.0, headers=BROWSER_HEADERS) as client:
+        for position, (media_url, ext) in enumerate(media_items, start=1):
+            name = stem if total == 1 else f"{stem}_{position}"
+            destination = unique_path(target_folder, name, ext)
+            try:
+                await download_public_file(media_url, destination, config.MAX_DIRECT_MEDIA_BYTES, client=client)
+                saved.append(destination)
+            except Exception as exc:
+                logger.warning("Falha ao baixar mídia %s de %s: %s", position, shortcode, exc)
             if progress_callback:
-                percent = round(((i + 1) / total) * 90, 1)
-                await progress_callback(percent, f"Baixando mídia {i+1} de {total}", str(file_path))
+                await progress_callback(round(position / total * 90, 1), f"Mídia {position} de {total}")
 
-    if not downloaded_paths:
-        raise ValueError("Não foi possível transferir as mídias do post do Instagram.")
+    if not saved:
+        raise ValueError("Não foi possível baixar as mídias desse post.")
+    if len(saved) == 1:
+        return str(saved[0])
 
-    # Se houver mais de 1 mídia (Baixar Todas), empacota todas as mídias em um único arquivo .ZIP
-    if len(downloaded_paths) > 1:
-        zip_name = f"{safe_title}.zip"
-        zip_path = target_folder / zip_name
-        
-        if progress_callback:
-            await progress_callback(95.0, "Compactando mídias em arquivo .zip...", str(zip_path))
-            
-        def _create_zip():
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-                for p in downloaded_paths:
-                    zf.write(p, arcname=Path(p).name)
-            return str(zip_path)
+    zip_path = unique_path(target_folder, stem, "zip")
+    if progress_callback:
+        await progress_callback(95.0, "Compactando em .zip")
 
-        final_zip = await asyncio.to_thread(_create_zip)
-        
-        if progress_callback:
-            await progress_callback(100.0, "Arquivo .zip pronto para download!", final_zip)
-            
-        return final_zip
+    def _zip():
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED) as archive:
+            for item in saved:
+                archive.write(item, arcname=item.name)
 
-    # Se for 1 única mídia, entrega o arquivo solto (.jpg ou .mp4)!
-    return downloaded_paths[0]
+    await asyncio.to_thread(_zip)
+    return str(zip_path)

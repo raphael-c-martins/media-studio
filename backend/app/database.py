@@ -1,15 +1,27 @@
-import aiosqlite
+"""Banco SQLite do Media Studio.
+
+Regra do projeto: nada aqui apaga ou recria tabelas. Mudanças de estrutura
+entram como migrations incrementais na lista MIGRATIONS, registradas na
+tabela schema_migrations e aplicadas uma única vez.
+"""
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
-from app.config import DB_PATH
+from datetime import datetime, timezone
 
-logger = logging.getLogger("media_downloader.database")
+import aiosqlite
+
+from app import config
+
+logger = logging.getLogger("media_studio.database")
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+
 
 @asynccontextmanager
 async def get_db_connection():
-    """Context manager assíncrono para conexão segura com o SQLite em modo WAL."""
-    db = await aiosqlite.connect(DB_PATH)
+    db = await aiosqlite.connect(config.DB_PATH, timeout=15)
     db.row_factory = aiosqlite.Row
     await db.execute("PRAGMA journal_mode=WAL;")
     await db.execute("PRAGMA foreign_keys=ON;")
@@ -18,14 +30,12 @@ async def get_db_connection():
     finally:
         await db.close()
 
-async def init_db():
-    """
-    Inicializa o banco de dados executando migrações incrementais seguras.
-    Nunca apaga ou reseta tabelas existentes.
-    """
-    async with get_db_connection() as db:
-        # Tabela de Downloads e Histórico
-        await db.execute("""
+
+MIGRATIONS = [
+    (
+        "001_tabelas_iniciais",
+        [
+            """
             CREATE TABLE IF NOT EXISTS downloads (
                 id TEXT PRIMARY KEY,
                 url TEXT NOT NULL,
@@ -48,50 +58,77 @@ async def init_db():
                 error_message TEXT,
                 created_at TEXT NOT NULL,
                 completed_at TEXT
-            );
-        """)
-
-        # Tabela de Configurações e Preferências
-        await db.execute("""
+            )
+            """,
+            """
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
                 updated_at TEXT NOT NULL
-            );
-        """)
+            )
+            """,
+        ],
+    ),
+    (
+        "002_indices_historico",
+        [
+            "CREATE INDEX IF NOT EXISTS idx_downloads_created_at ON downloads(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status)",
+        ],
+    ),
+]
 
-        # Tabela de Resumos e Análises de IA
-        await db.execute("""
-            CREATE TABLE IF NOT EXISTS ai_summaries (
-                id TEXT PRIMARY KEY,
-                download_id TEXT,
-                url TEXT NOT NULL,
-                title TEXT,
-                summary TEXT NOT NULL,
-                key_points TEXT,
-                transcript TEXT,
-                model TEXT,
-                created_at TEXT NOT NULL
-            );
-        """)
+DEFAULT_SETTINGS = {
+    "default_format": "best",
+    "default_audio_format": "mp3",
+    "theme": "system",
+}
 
-        # Configurações padrão iniciais (se não existirem)
-        default_settings = [
-            ("download_folder", str((DB_PATH.parent / "downloads").resolve())),
-            ("default_format", "best"),
-            ("default_audio_format", "mp3"),
-            ("deepseek_api_key", ""),
-            ("deepseek_model", "deepseek-chat"),
-            ("auto_embed_thumbnail", "true"),
-            ("auto_embed_subtitles", "true"),
-            ("theme", "dark")
-        ]
 
-        for key, val in default_settings:
-            await db.execute("""
-                INSERT OR IGNORE INTO settings (key, value, updated_at)
-                VALUES (?, ?, ?)
-            """, (key, val, datetime.utcnow().isoformat()))
+async def init_db() -> None:
+    async with get_db_connection() as db:
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        cursor = await db.execute("SELECT name FROM schema_migrations")
+        applied = {row["name"] for row in await cursor.fetchall()}
 
+        for name, statements in MIGRATIONS:
+            if name in applied:
+                continue
+            for statement in statements:
+                await db.execute(statement)
+            await db.execute(
+                "INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)", (name, utc_now())
+            )
+            logger.info("Migration aplicada: %s", name)
+
+        defaults = {**DEFAULT_SETTINGS, "download_folder": str(config.DOWNLOADS_DIR.resolve())}
+        for key, value in defaults.items():
+            await db.execute(
+                "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+                (key, value, utc_now()),
+            )
         await db.commit()
-        logger.info("Banco de dados SQLite inicializado com sucesso.")
+
+
+async def recover_interrupted_downloads() -> int:
+    """Downloads que estavam na fila quando o servidor parou não voltam sozinhos: marca como erro."""
+    async with get_db_connection() as db:
+        cursor = await db.execute(
+            """
+            UPDATE downloads
+            SET status = 'error', error_message = 'Interrompido: o servidor foi reiniciado.', completed_at = ?
+            WHERE status IN ('queued', 'downloading')
+            """,
+            (utc_now(),),
+        )
+        await db.commit()
+        return cursor.rowcount or 0
+
+
+async def get_setting(key: str, default: str = "") -> str:
+    async with get_db_connection() as db:
+        cursor = await db.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = await cursor.fetchone()
+        return row["value"] if row and row["value"] else default

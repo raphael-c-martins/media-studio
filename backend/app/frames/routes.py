@@ -1,497 +1,158 @@
-import os
-import io
-import time
+import asyncio
 import logging
-from logging.handlers import RotatingFileHandler
-import cv2
-import av
+import os
 import tempfile
-import threading
-from typing import Optional, List, Dict
-from fastapi import FastAPI, File, UploadFile, Query, HTTPException, BackgroundTasks, Request
-from fastapi.responses import Response, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
+from pathlib import Path
+from typing import Literal
 
-# Configuração Robusta de Logs Persistentes
-LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-os.makedirs(LOGS_DIR, exist_ok=True)
-log_file_path = os.path.join(LOGS_DIR, "servidor.log")
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, UploadFile, File
+from fastapi.responses import Response
 
-logger = logging.getLogger("FrameStudio")
-logger.setLevel(logging.INFO)
+from app import config
+from app.frames import engine
+from app.frames.registry import VideoSession, registry
 
-# Formatação limpa de logs
-formatter = logging.Formatter(
-    fmt="[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
+logger = logging.getLogger("media_studio.frames")
+router = APIRouter(prefix="/api/frames", tags=["Frames"])
 
-# Handler de arquivo com rotação (5MB max, 3 backups)
-if not logger.handlers:
-    file_handler = RotatingFileHandler(log_file_path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi", ".ogg"}
+ImageFormat = Literal["png", "jpeg", "webp"]
+AspectRatio = Literal["original", "16:9", "9:16", "1:1", "4:5"]
+CHUNK_SIZE = 4 * 1024 * 1024
 
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
 
-logger.info("Iniciando FrameStudio Engine com sistema de logs robusto.")
+def _session_or_404(video_id: str) -> VideoSession:
+    session = registry.get(video_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Vídeo não encontrado. Envie o arquivo novamente.")
+    return session
 
-app = FastAPI(title="FrameStudio Engine", version="1.4.0")
 
-@app.middleware("http")
-async def log_requests_middleware(request: Request, call_next):
-    start_time = time.time()
+def _index_in_background(session: VideoSession) -> None:
     try:
-        response = await call_next(request)
-        process_time = (time.time() - start_time) * 1000
-        # Loga apenas rotas de API para nao poluir com assets estaticos normais
-        if request.url.path.startswith("/api/"):
-            logger.info(f"{request.method} {request.url.path} -> {response.status_code} ({process_time:.1f}ms)")
-        return response
-    except Exception as e:
-        process_time = (time.time() - start_time) * 1000
-        logger.error(f"FALHA {request.method} {request.url.path} após {process_time:.1f}ms: {str(e)}", exc_info=True)
-        raise e
+        engine.index_previews(str(session.path), session.rotation, session.preview_cache, lambda: session.closed)
+        session.is_indexed = not session.closed
+    except Exception as exc:
+        logger.warning("Indexação de prévias falhou para %s: %s", session.filename, exc)
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+async def _save_upload(file: UploadFile, request: Request) -> Path:
+    declared = int(request.headers.get("content-length") or 0)
+    if declared > config.MAX_VIDEO_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="O vídeo passa do tamanho máximo permitido.")
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_cache")
-os.makedirs(CACHE_DIR, exist_ok=True)
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in VIDEO_EXTENSIONS:
+        raise HTTPException(status_code=415, detail="Formato não suportado. Use MP4, MOV, MKV, WebM, M4V ou AVI.")
 
-# Estrutura em memoria por video:
-# {
-#   video_id: {
-#       "path": str,
-#       "rotation": int,
-#       "width": int,
-#       "height": int,
-#       "fps": float,
-#       "duration": float,
-#       "total_frames": int,
-#       "preview_cache": Dict[int, bytes], # key = int(time * 20) -> jpeg bytes
-#       "keyframes": List[dict],
-#       "is_indexed": bool
-#   }
-# }
-VIDEO_REGISTRY = {}
+    fd, temp_name = tempfile.mkstemp(prefix="ms_", suffix=suffix, dir=config.FRAMES_CACHE_DIR)
+    os.close(fd)
+    destination = Path(temp_name)
+    total = 0
+    try:
+        with destination.open("wb") as handle:
+            while chunk := await file.read(CHUNK_SIZE):
+                total += len(chunk)
+                if total > config.MAX_VIDEO_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="O vídeo passa do tamanho máximo permitido.")
+                await asyncio.to_thread(handle.write, chunk)
+    except BaseException:
+        destination.unlink(missing_ok=True)
+        raise
+    return destination
 
-def apply_aspect_ratio_crop(image, aspect_ratio: str):
-    """Aplica recorte proporcional centralizado preservando resolucao maxima."""
-    if not aspect_ratio or aspect_ratio == "original":
-        return image
 
-    h, w = image.shape[:2]
-    ratios = {
-        "16:9": 16 / 9,
-        "9:16": 9 / 16,
-        "1:1": 1 / 1,
-        "4:5": 4 / 5,
+@router.post("/videos")
+async def upload_video(request: Request, background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    path = await _save_upload(file, request)
+    try:
+        meta = await asyncio.to_thread(engine.probe_video, str(path))
+    except ValueError as exc:
+        path.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    session = VideoSession(
+        video_id=path.stem, path=path, filename=Path(file.filename or "video").name,
+        rotation=meta["rotation"], width=meta["width"], height=meta["height"], fps=meta["fps"],
+        duration=meta["duration"], total_frames=meta["total_frames"],
+    )
+    if meta["first_preview"]:
+        session.preview_cache[0] = meta["first_preview"]
+    registry.add(session)
+    background_tasks.add_task(_index_in_background, session)
+    logger.info("Vídeo carregado no extrator: %s (%sx%s)", session.filename, session.width, session.height)
+
+    return {
+        "video_id": session.video_id, "filename": session.filename, "width": session.width,
+        "height": session.height, "fps": session.fps, "total_frames": session.total_frames,
+        "duration": session.duration,
     }
 
-    target_ratio = ratios.get(aspect_ratio)
-    if not target_ratio:
-        return image
 
-    current_ratio = w / h
-    if current_ratio > target_ratio:
-        new_w = int(h * target_ratio)
-        x_start = int((w - new_w) / 2)
-        return image[:, x_start:x_start + new_w]
-    else:
-        new_h = int(w / target_ratio)
-        y_start = int((h - new_h) / 2)
-        return image[y_start:y_start + new_h, :]
+@router.delete("/videos/{video_id}")
+async def close_video(video_id: str):
+    registry.remove(video_id)
+    return {"success": True}
 
-def correct_frame_orientation(img, rotation: int):
-    """Garante que o frame fique sempre na orientacao correta (vertical em pe)."""
-    if rotation == 90 and img.shape[0] < img.shape[1]:
-        return cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-    elif rotation == 180:
-        return cv2.rotate(img, cv2.ROTATE_180)
-    elif rotation == 270 and img.shape[0] < img.shape[1]:
-        return cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
-    return img
 
-def background_index_video(video_id: str):
-    """Gera cache rapido de frames de preview em background para permitir scrubbing a 60 FPS."""
-    meta = VIDEO_REGISTRY.get(video_id)
-    if not meta:
-        return
-
-    try:
-        container = av.open(meta["path"])
-        stream = container.streams.video[0]
-        time_base = float(stream.time_base)
-        rotation = meta["rotation"]
-
-        for frame in container.decode(stream):
-            t = float(frame.pts * time_base) if frame.pts is not None else 0.0
-            key = int(round(t, 2) * 20) # 1 frame a cada 0.05s
-            if key not in meta["preview_cache"]:
-                img = frame.to_ndarray(format="bgr24")
-                img = correct_frame_orientation(img, rotation)
-                
-                # Redimensiona para preview rapido
-                h, w = img.shape[:2]
-                preview_w = 480
-                preview_h = int(h * (preview_w / w))
-                preview = cv2.resize(img, (preview_w, preview_h), interpolation=cv2.INTER_LINEAR)
-                
-                _, encoded = cv2.imencode(".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                meta["preview_cache"][key] = encoded.tobytes()
-
-        container.close()
-        meta["is_indexed"] = True
-    except Exception as e:
-        print(f"[ERRO] Falha na indexacao em background para {video_id}: {e}")
-
-@app.post("/api/upload")
-async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    """Recebe o video, detecta rotacao, extrai metadados e primeiro frame imediatamente."""
-    try:
-        file_ext = os.path.splitext(file.filename)[1] or ".mp4"
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_ext, dir=CACHE_DIR)
-        video_id = os.path.basename(temp_file.name)
-
-        contents = await file.read()
-        temp_file.write(contents)
-        temp_file.close()
-
-        video_path = temp_file.name
-
-        # Detecta rotacao e metadados via OpenCV
-        cap = cv2.VideoCapture(video_path)
-        cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 1)
-        rot_meta = cap.get(cv2.CAP_PROP_ORIENTATION_META)
-        rotation = int(rot_meta) if rot_meta else 0
-
-        raw_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        raw_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration = total_frames / fps if fps > 0 else 0.0
-
-        # Le o primeiro frame imediatamente para pre-aquecer
-        ret, first_frame = cap.read()
-        cap.release()
-
-        # Ajusta dimensoes baseadas na rotacao
-        if rotation in (90, 270) and raw_w > raw_h:
-            final_width, final_height = raw_h, raw_w
-        else:
-            final_width, final_height = raw_w, raw_h
-
-        preview_cache = {}
-        if ret and first_frame is not None:
-            first_frame = correct_frame_orientation(first_frame, rotation)
-            h, w = first_frame.shape[:2]
-            p_w = 480
-            p_h = int(h * (p_w / w))
-            first_preview = cv2.resize(first_frame, (p_w, p_h), interpolation=cv2.INTER_LINEAR)
-            _, enc = cv2.imencode(".jpg", first_preview, [cv2.IMWRITE_JPEG_QUALITY, 85])
-            preview_cache[0] = enc.tobytes()
-
-        # Registra o video
-        VIDEO_REGISTRY[video_id] = {
-            "path": video_path,
-            "rotation": rotation,
-            "width": final_width,
-            "height": final_height,
-            "fps": round(fps, 2),
-            "duration": round(duration, 3),
-            "total_frames": total_frames,
-            "preview_cache": preview_cache,
-            "is_indexed": False
-        }
-
-        # Dispara indexacao de preview em background
-        background_tasks.add_task(background_index_video, video_id)
-
-        return {
-            "video_id": video_id,
-            "filename": file.filename,
-            "width": final_width,
-            "height": final_height,
-            "fps": round(fps, 2),
-            "total_frames": total_frames,
-            "duration": round(duration, 3)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao processar video: {str(e)}")
-
-@app.get("/api/preview")
-async def get_preview_frame(video_id: str = Query(...), time: float = Query(0.0)):
-    """Retorna o frame de preview do cache em memoria em < 1ms para scrubbing a 60 FPS."""
-    meta = VIDEO_REGISTRY.get(video_id)
-    if not meta:
-        raise HTTPException(status_code=404, detail="Video nao encontrado.")
-
-    key = int(round(time, 2) * 20)
-    cache = meta["preview_cache"]
-
-    # Se estiver exatamente no cache
+@router.get("/videos/{video_id}/preview")
+async def get_preview(video_id: str, time: float = Query(0.0, ge=0)):
+    session = _session_or_404(video_id)
+    key = engine.preview_key(min(time, session.duration))
+    cache = session.preview_cache
     if key in cache:
         return Response(content=cache[key], media_type="image/jpeg")
-
-    # Busca a chave mais proxima no cache existente
     if cache:
-        closest_key = min(cache.keys(), key=lambda k: abs(k - key))
-        return Response(content=cache[closest_key], media_type="image/jpeg")
-
-    # Fallback: decodifica diretamente via OpenCV
-    cap = cv2.VideoCapture(meta["path"])
-    cap.set(cv2.CAP_PROP_POS_MSEC, time * 1000.0)
-    ret, frame = cap.read()
-    cap.release()
-
-    if ret and frame is not None:
-        frame = correct_frame_orientation(frame, meta["rotation"])
-        h, w = frame.shape[:2]
-        p_w = 480
-        p_h = int(h * (p_w / w))
-        preview = cv2.resize(frame, (p_w, p_h), interpolation=cv2.INTER_LINEAR)
-        _, enc = cv2.imencode(".jpg", preview, [cv2.IMWRITE_JPEG_QUALITY, 80])
-        return Response(content=enc.tobytes(), media_type="image/jpeg")
-
-    raise HTTPException(status_code=500, detail="Erro ao decodificar preview.")
-
-@app.get("/api/frame")
-async def get_full_resolution_frame(
-    video_id: str = Query(...),
-    time: float = Query(0.0),
-    format: str = Query("jpeg"),
-    aspect_ratio: str = Query("original")
-):
-    """Extrai o frame em resolucao nativa maxima (4K original) com orientacao correta."""
-    meta = VIDEO_REGISTRY.get(video_id)
-    if not meta:
-        raise HTTPException(status_code=404, detail="Video nao encontrado.")
-
-    video_path = meta["path"]
-    rotation = meta["rotation"]
-
+        nearest = min(list(cache.keys()), key=lambda k: abs(k - key))
+        if abs(nearest - key) <= engine.PREVIEW_STEP or session.is_indexed:
+            return Response(content=cache[nearest], media_type="image/jpeg")
     try:
-        container = av.open(video_path)
-        stream = container.streams.video[0]
-        time_base = float(stream.time_base)
+        content = await asyncio.to_thread(engine.read_preview_direct, str(session.path), time, session.rotation)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return Response(content=content, media_type="image/jpeg")
 
-        target_pts = int(time / time_base)
-        container.seek(target_pts, stream=stream)
 
-        best_frame = None
-        min_diff = float("inf")
-
-        for frame in container.decode(stream):
-            curr_time = float(frame.pts * time_base) if frame.pts is not None else 0.0
-            diff = abs(curr_time - time)
-            if diff < min_diff:
-                min_diff = diff
-                best_frame = frame
-            if curr_time > time + 0.15:
-                break
-
-        container.close()
-
-        if best_frame is None:
-            raise HTTPException(status_code=500, detail="Nao foi possivel localizar o frame.")
-
-        img = best_frame.to_ndarray(format="bgr24")
-        img = correct_frame_orientation(img, rotation)
-        img = apply_aspect_ratio_crop(img, aspect_ratio)
-
-        if format.lower() == "png":
-            success, encoded_img = cv2.imencode(".png", img, [cv2.IMWRITE_PNG_COMPRESSION, 3])
-            media_type = "image/png"
-        else:
-            success, encoded_img = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 98])
-            media_type = "image/jpeg"
-
-        if not success:
-            raise HTTPException(status_code=500, detail="Erro ao codificar frame.")
-
-        return Response(content=encoded_img.tobytes(), media_type=media_type)
-    except Exception as e:
-        # Fallback OpenCV
-        cap = cv2.VideoCapture(video_path)
-        cap.set(cv2.CAP_PROP_POS_MSEC, time * 1000.0)
-        ret, frame = cap.read()
-        cap.release()
-        if ret and frame is not None:
-            frame = correct_frame_orientation(frame, rotation)
-            frame = apply_aspect_ratio_crop(frame, aspect_ratio)
-            if format.lower() == "png":
-                _, enc = cv2.imencode(".png", frame, [cv2.IMWRITE_PNG_COMPRESSION, 3])
-                return Response(content=enc.tobytes(), media_type="image/png")
-            else:
-                _, enc = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 98])
-                return Response(content=enc.tobytes(), media_type="image/jpeg")
-
-        raise HTTPException(status_code=500, detail=f"Erro ao extrair frame: {str(e)}")
-
-@app.get("/api/samples")
-async def get_samples(video_id: str = Query(...), count: int = Query(12)):
-    """Gera as miniaturas sugeridas em < 1s com orientacao vertical correta."""
-    meta = VIDEO_REGISTRY.get(video_id)
-    if not meta:
-        raise HTTPException(status_code=404, detail="Video nao encontrado.")
-
-    video_path = meta["path"]
-    rotation = meta["rotation"]
-    duration = meta["duration"]
-
-    if count < 1:
-        count = 12
-
-    margin = duration * 0.02
-    effective_duration = duration - (margin * 2)
-    step = effective_duration / (count - 1) if count > 1 else 0
-
-    samples = []
-    import base64
-
-    # Utiliza PyAV com skip_frame NONKEY para extracao instantanea
+@router.get("/videos/{video_id}/frame")
+async def get_frame(video_id: str, time: float = Query(0.0, ge=0), format: ImageFormat = "png",
+                    aspect_ratio: AspectRatio = "original"):
+    session = _session_or_404(video_id)
     try:
-        container = av.open(video_path)
-        stream = container.streams.video[0]
-        stream.codec_context.skip_frame = "NONKEY"
-        time_base = float(stream.time_base)
+        content, mime = await asyncio.to_thread(
+            engine.extract_frame, str(session.path), min(time, session.duration), session.rotation, format, aspect_ratio
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return Response(content=content, media_type=mime)
 
-        keyframes = []
-        for frame in container.decode(stream):
-            t = float(frame.pts * time_base) if frame.pts is not None else 0.0
-            img = frame.to_ndarray(format="bgr24")
-            img = correct_frame_orientation(img, rotation)
-            h, w = img.shape[:2]
-            thumb_w = 270
-            thumb_h = int(h * (thumb_w / w))
-            thumb = cv2.resize(img, (thumb_w, thumb_h), interpolation=cv2.INTER_AREA)
-            keyframes.append((t, thumb))
 
-        container.close()
-
-        if len(keyframes) >= count:
-            # Seleciona N distribuidos
-            step_kf = len(keyframes) / count
-            selected = [keyframes[int(i * step_kf)] for i in range(count)]
-        else:
-            selected = keyframes
-
-        for t, thumb in selected:
-            _, encoded = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 85])
-            base64_str = base64.b64encode(encoded.tobytes()).decode("utf-8")
-            data_url = f"data:image/jpeg;base64,{base64_str}"
-
-            hours = int(t // 3600)
-            minutes = int((t % 3600) // 60)
-            seconds = int(t % 60)
-            millis = int((t % 1) * 1000)
-            time_formatted = f"{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}"
-
-            samples.append({
-                "time": round(t, 3),
-                "timeFormatted": time_formatted,
-                "dataUrl": data_url
-            })
-    except Exception as e:
-        print(f"[AVISO] Erro na amostragem rapida: {e}")
-
+@router.get("/videos/{video_id}/samples")
+async def get_samples(video_id: str, count: int = Query(12, ge=1, le=48)):
+    session = _session_or_404(video_id)
+    try:
+        samples = await asyncio.to_thread(engine.sample_keyframes, str(session.path), session.rotation, count)
+    except Exception as exc:
+        logger.warning("Amostragem falhou para %s: %s", session.filename, exc)
+        raise HTTPException(status_code=500, detail="Não foi possível gerar as sugestões.") from exc
     return {"samples": samples}
 
-@app.get("/api/burst")
-async def extract_burst_frames(
-    video_id: str = Query(...),
-    start_time: float = Query(0.0),
-    end_time: float = Query(0.0),
-    count: int = Query(6),
-    format: str = Query("jpeg"),
-    aspect_ratio: str = Query("original")
-):
-    """Extrai uma sequencia de N frames de alta resolucao no intervalo de tempo especificado."""
-    meta = VIDEO_REGISTRY.get(video_id)
-    if not meta:
-        raise HTTPException(status_code=404, detail="Video nao encontrado.")
 
-    video_path = meta["path"]
-    rotation = meta["rotation"]
-    duration = meta["duration"]
+@router.get("/videos/{video_id}/burst")
+async def get_burst(video_id: str, start: float = Query(0.0, ge=0), end: float = Query(0.0, ge=0),
+                    count: int = Query(6, ge=2, le=30), format: ImageFormat = "jpeg",
+                    aspect_ratio: AspectRatio = "original"):
+    session = _session_or_404(video_id)
+    end = session.duration if end <= start or end > session.duration else end
+    start = min(start, end)
+    frames = await asyncio.to_thread(
+        engine.extract_burst, str(session.path), session.rotation, start, end, count, format, aspect_ratio
+    )
+    return {"frames": frames}
 
-    if start_time < 0:
-        start_time = 0.0
-    if end_time <= start_time or end_time > duration:
-        end_time = duration
 
-    if count < 2:
-        count = 2
-    if count > 30:
-        count = 30
-
-    timestamps = [start_time + i * (end_time - start_time) / (count - 1) for i in range(count)]
-    burst_results = []
-    import base64
-
-    for t in timestamps:
-        try:
-            cap = cv2.VideoCapture(video_path)
-            cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000.0)
-            ret, frame = cap.read()
-            cap.release()
-
-            if ret and frame is not None:
-                frame = correct_frame_orientation(frame, rotation)
-                frame = apply_aspect_ratio_crop(frame, aspect_ratio)
-                h, w = frame.shape[:2]
-
-                if format.lower() == "png":
-                    _, enc = cv2.imencode(".png", frame, [cv2.IMWRITE_PNG_COMPRESSION, 3])
-                    mime = "image/png"
-                else:
-                    _, enc = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
-                    mime = "image/jpeg"
-
-                b64 = base64.b64encode(enc.tobytes()).decode("utf-8")
-                data_url = f"data:{mime};base64,{b64}"
-
-                seconds = int(t % 60)
-                millis = int((t % 1) * 10)
-                formatted = f"{seconds:02d}.{millis}s"
-
-                burst_results.append({
-                    "time": round(t, 3),
-                    "timeFormatted": formatted,
-                    "dataUrl": data_url,
-                    "width": w,
-                    "height": h
-                })
-        except Exception as err:
-            print(f"[AVISO] Falha ao extrair frame no burst ({t}s): {err}")
-
-    return {"frames": burst_results}
-
-@app.get("/api/health")
-async def health_check():
-    """Health Check para monitoramento e alta disponibilidade (HA)."""
-    return {
-        "status": "healthy",
-        "service": "FrameStudio Engine",
-        "version": "1.4.1",
-        "active_videos": len(VIDEO_REGISTRY)
-    }
-
-# Servir Frontend
-STATIC_DIR = os.path.dirname(os.path.abspath(__file__))
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
-
-if __name__ == "__main__":
-    print("[INFO] Iniciando FrameStudio Engine na porta 5522...")
-    uvicorn.run(app, host="127.0.0.1", port=5522, log_level="info")
+async def cleanup_loop(interval_seconds: int = 300) -> None:
+    while True:
+        await asyncio.sleep(interval_seconds)
+        expired = registry.expire_idle()
+        if expired:
+            logger.info("Sessões de vídeo encerradas por inatividade: %s", expired)

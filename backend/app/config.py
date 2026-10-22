@@ -1,39 +1,63 @@
+"""Configuração central do Media Studio.
+
+Tudo que muda entre máquinas vem de variáveis de ambiente com prefixo MS_.
+Nenhum segredo tem valor padrão: sem MS_ACCESS_TOKEN o servidor só aceita
+conexões da própria máquina.
+"""
 import os
-import sys
 from pathlib import Path
 
-# Raiz do projeto e diretório backend no sys.path
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-BACKEND_DIR = BASE_DIR / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
+ROOT_DIR = Path(__file__).resolve().parents[2]
+FRONTEND_DIR = ROOT_DIR / "frontend"
 
-LOGS_DIR = BASE_DIR / "logs"
-DOWNLOADS_DIR = BASE_DIR / "downloads"
-DB_PATH = BASE_DIR / "media_downloader.db"
+DATA_DIR = Path(os.getenv("MS_DATA_DIR", ROOT_DIR / "data"))
+LOGS_DIR = Path(os.getenv("MS_LOGS_DIR", ROOT_DIR / "logs"))
+DOWNLOADS_DIR = Path(os.getenv("MS_DOWNLOADS_DIR", ROOT_DIR / "downloads"))
+TEMP_DIR = Path(os.getenv("MS_TEMP_DIR", ROOT_DIR / "temp"))
+FRAMES_CACHE_DIR = TEMP_DIR / "frames"
+DB_PATH = DATA_DIR / "media_studio.db"
 
-# Garantir existência dos diretórios críticos
-LOGS_DIR.mkdir(parents=True, exist_ok=True)
-DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-(LOGS_DIR / "logs-cmd").mkdir(parents=True, exist_ok=True)
+APP_VERSION = "2.0.0"
 
-# Configurações do Servidor
-PORT = int(os.getenv("PORT", 8800))
-HOST = os.getenv("HOST", "0.0.0.0")
+HOST = os.getenv("MS_HOST", "127.0.0.1").strip()
+PORT = int(os.getenv("MS_PORT", "8810"))
 
-# CORS
-CORS_ORIGINS = [
-    "http://localhost:3030",
-    "http://127.0.0.1:3030",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "*"
-]
+# Token exigido apenas quando o servidor escuta fora da própria máquina.
+ACCESS_TOKEN = os.getenv("MS_ACCESS_TOKEN", "").strip()
+MIN_TOKEN_LENGTH = 24
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
-# Configurações do DeepSeek AI
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+MAX_CONCURRENT_DOWNLOADS = int(os.getenv("MS_MAX_CONCURRENT_DOWNLOADS", "3"))
 
-# Limites de Concorrência
-MAX_CONCURRENT_DOWNLOADS = int(os.getenv("MAX_CONCURRENT_DOWNLOADS", "3"))
+# Limites de tamanho (em bytes)
+MAX_VIDEO_UPLOAD_BYTES = int(os.getenv("MS_MAX_UPLOAD_MB", "4096")) * 1024 * 1024
+MAX_DIRECT_MEDIA_BYTES = int(os.getenv("MS_MAX_DIRECT_MEDIA_MB", "1024")) * 1024 * 1024
+MAX_THUMBNAIL_BYTES = 15 * 1024 * 1024
+
+# Sessões de vídeo do extrator de frames
+FRAME_SESSION_TTL_SECONDS = int(os.getenv("MS_FRAME_SESSION_TTL_MIN", "30")) * 60
+MAX_FRAME_SESSIONS = int(os.getenv("MS_MAX_FRAME_SESSIONS", "4"))
+
+
+def is_loopback_host(host: str) -> bool:
+    return host.strip("[]").lower() in LOOPBACK_HOSTS
+
+
+def token_required() -> bool:
+    return bool(ACCESS_TOKEN)
+
+
+def validate_runtime() -> None:
+    """Recusa iniciar em modo de rede sem um token forte."""
+    if is_loopback_host(HOST):
+        return
+    if len(ACCESS_TOKEN) < MIN_TOKEN_LENGTH:
+        raise RuntimeError(
+            f"MS_HOST={HOST} expõe o servidor na rede. Defina MS_ACCESS_TOKEN com pelo menos "
+            f"{MIN_TOKEN_LENGTH} caracteres ou use MS_HOST=127.0.0.1."
+        )
+
+
+def ensure_dirs() -> None:
+    for folder in (DATA_DIR, LOGS_DIR, DOWNLOADS_DIR, FRAMES_CACHE_DIR):
+        folder.mkdir(parents=True, exist_ok=True)

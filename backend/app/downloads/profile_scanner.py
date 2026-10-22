@@ -6,9 +6,9 @@ from pydantic import BaseModel
 import instaloader
 import yt_dlp
 
-from app.services.downloader import get_base_ydl_opts
+from app.downloads.downloader import get_base_ydl_opts
 
-logger = logging.getLogger("media_downloader.profile_scanner")
+logger = logging.getLogger("media_studio.profile_scanner")
 
 class ProfileMediaItem(BaseModel):
     id: str
@@ -103,7 +103,7 @@ async def scan_instagram_profile(target: str, limit: int = 18) -> ProfileScanRes
                 
                 m_type = "image"
                 if post.is_video:
-                    m_type = "reel" if post.is_video else "video"
+                    m_type = "reel"
                 elif post.mediacount > 1:
                     m_type = "carousel"
 
@@ -221,4 +221,4 @@ async def scan_profile(target: str, platform: str = "auto", limit: int = 18) -> 
     else:
         if target_clean.startswith("@"):
             return await scan_instagram_profile(target_clean, limit)
-        return await scan_generic_profile(target_clean, "Universal", limit)
+        return await scan_generic_profile(target_clean, "Outro site", limit)

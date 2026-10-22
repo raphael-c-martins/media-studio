@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Tuple
 
-logger = logging.getLogger("media_downloader.ffmpeg")
+logger = logging.getLogger("media_studio.ffmpeg")
 
 # Cache interno para evitar chamadas repetidas ao static-ffmpeg
 _cached_ffmpeg_dir: Optional[str] = None
