@@ -37,7 +37,7 @@ def test_configuracoes_recusam_chave_desconhecida(client):
 
 
 def test_configuracoes_recusam_pasta_do_sistema(client):
-    system_root = os.environ.get("SystemRoot", r"C:\Windows")
+    system_root = os.environ.get("SystemRoot", r"C:\Windows") if os.name == "nt" else "/usr"
     response = client.put("/api/settings", json={"download_folder": system_root}, headers=LOCAL_HEADERS)
     assert response.status_code == 400
 

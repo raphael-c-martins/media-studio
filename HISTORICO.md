@@ -19,6 +19,11 @@ Registro das decisões do projeto. O histórico completo de cada ferramenta ante
 
 ## Linha do tempo
 
+### [23/10/2026] - CI no GitHub e proteção de pastas no Linux
+
+- **CI:** a cada envio, o GitHub Actions roda os 64 testes, a busca de segredos (gitleaks) e o `pip-audit` (só informativo).
+- **Problema encontrado pelo CI:** a regra que impede escolher uma pasta do sistema como destino só conhecia pastas do Windows. Rodando em Linux (como no CI ou num servidor Ubuntu), `/etc`, `/usr` e outras eram aceitas. Agora também são recusadas, e os testes usam a pasta de sistema certa para cada sistema operacional.
+
 ### [22/10/2026] - Atalhos do extrator reduzidos ao básico
 
 - **Por quê:** a regra de "One-Hand Workflow" saiu das diretrizes globais; os atalhos extras quase não eram usados e poluíam a tela com etiquetas de tecla.

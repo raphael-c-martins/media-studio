@@ -47,7 +47,7 @@ def test_configuracoes_aceitam_somente_chaves_conhecidas():
 
 
 def test_pasta_do_sistema_e_recusada():
-    system_root = os.environ.get("SystemRoot", r"C:\Windows")
+    system_root = os.environ.get("SystemRoot", r"C:\Windows") if os.name == "nt" else "/etc"
     with pytest.raises(StorageError):
         resolve_download_folder(system_root)
     appdata = os.environ.get("APPDATA")

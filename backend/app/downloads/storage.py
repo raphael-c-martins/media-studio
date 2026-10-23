@@ -17,6 +17,10 @@ _FORBIDDEN_CHARS = re.compile(r'[\x00-\x1f<>:"/\\|?*]')
 _RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
 
+# Pastas do sistema em Linux/macOS (o servidor também pode rodar fora do Windows, como no CI)
+_POSIX_PROTECTED = ("/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/proc", "/root", "/sbin", "/sys", "/usr")
+
+
 class StorageError(ValueError):
     pass
 
@@ -29,6 +33,8 @@ def _protected_dirs() -> Iterable[Path]:
     appdata = env.get("APPDATA")
     if appdata:
         candidates.append(str(Path(appdata) / "Microsoft" / "Windows" / "Start Menu"))
+    if os.name != "nt":
+        candidates.extend(_POSIX_PROTECTED)
     for item in candidates:
         if item:
             yield Path(item).resolve()
