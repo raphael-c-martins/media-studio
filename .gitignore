@@ -13,10 +13,10 @@ __pycache__/
 *.pfx
 
 # Dados locais (banco, downloads, temporários)
-data/
-downloads/
-temp/
-temp_cache/
+/data/
+/downloads/
+/temp/
+/temp_cache/
 *.db
 *.db-shm
 *.db-wal
