@@ -21,7 +21,7 @@ def _make_sample_jpg(path: Path, width: int = 2000, height: int = 1000, orientat
     return path
 
 
-def _write_sample_mp4(path: Path, width: int = 640, height: int = 360) -> Path:
+def _write_sample_mp4(path: Path, width: int = 640, height: int = 800) -> Path:
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     writer = cv2.VideoWriter(str(path), fourcc, 10.0, (width, height))
     try:
@@ -97,18 +97,30 @@ def test_batch_cli_manifest_processes_mixed_media_without_overwriting(test_root,
     assert img3.shape == (1350, 1080, 3)
 
 
-def test_batch_cli_strict_warnings_and_system_folder_blocked(test_root, capsys):
+def test_batch_cli_holds_wide_crop_until_decision_and_blocks_system_folder(test_root, capsys):
     src_dir = test_root / "orig"
     src_dir.mkdir()
-    _make_sample_jpg(src_dir / "panoramica.jpg", 2000, 800, orientation=1)
+    pano = _make_sample_jpg(src_dir / "panoramica.jpg", 2000, 800, orientation=1)
     out_dir = test_root / "saida"
 
-    # --strict deve retornar 2 quando há wide_crop
-    code_strict = batch_cli.main(
-        ["--input-dir", str(src_dir), "--output-dir", str(out_dir), "--dry-run", "--strict"]
+    # Sem --allow-wide nem approved=true, foto wide_crop (16:9) pausa sem gravar e retorna 2
+    code_hold = batch_cli.main(["--input-dir", str(src_dir), "--output-dir", str(out_dir)])
+    assert code_hold == 2
+    report_hold = json.loads(capsys.readouterr().out)
+    assert report_hold["needs_decision_count"] == 1
+    assert report_hold["items"][0]["status"] == "needs_decision"
+    assert not (out_dir / "1.png").exists()
+
+    # Após decisão explícita no manifesto ("approved": true), a saída 1080x1350 é gravada
+    manifest = test_root / "decisao.json"
+    manifest.write_text(
+        json.dumps({"output_dir": str(out_dir), "items": [{"index": 1, "source": str(pano), "approved": True}]}),
+        encoding="utf-8",
     )
-    assert code_strict == 2
+    code_ok = batch_cli.main(["--manifest", str(manifest)])
+    assert code_ok == 0
     capsys.readouterr()
+    assert (out_dir / "1.png").is_file()
 
     # Pasta do sistema deve ser rejeitada com código 1
     sys_dir = Path(os.environ.get("WINDIR", r"C:\Windows")) if os.name == "nt" else Path("/etc")
