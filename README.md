@@ -94,6 +94,8 @@ python -m app.frames.batch_cli --manifest caminho/do/manifesto.json
 python -m app.frames.batch_cli --input-dir "./# Originais" --output-dir "./Saida" --aspect-ratio 4:5 --format png
 ```
 
+Fotos muito largas (`wide_crop`, ex.: `16:9` que perde mais de 45% da largura em `4:5`) ficam pausadas por padrão (`status: "needs_decision"`, código de saída `2`, sem gravar arquivo) até decisão explícita (`"approved": true` ou `"fit_mode": "contain_blur"` no manifesto, ou flag `--allow-wide`). Com `--strict`, o mesmo bloqueio vale também para recortes em baixa resolução (`low_resolution`).
+
 Variáveis adicionais de ambiente para fotos estáticas:
 - `MS_MAX_IMAGE_MB` (padrão `100`): limite em MB por upload de imagem na rota `/api/frames/images`.
 - `MS_MAX_IMAGE_PIXELS` (padrão `120000000`): teto de segurança contra imagens gigantes/descompressão abusiva.

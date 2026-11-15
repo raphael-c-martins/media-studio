@@ -61,6 +61,15 @@ def _parse_output_size(value: Any) -> Optional[Tuple[int, int]]:
     raise ValueError("output_size inválido: use [largura, altura] positivos.")
 
 
+def _should_hold_item(warnings: List[str], *, approved: bool, allow_wide: bool, strict: bool) -> bool:
+    """Pausa gravação de cortes largos (16:9) ou avisos no modo estrito para decisão caso a caso."""
+    if approved:
+        return False
+    if "wide_crop" in warnings and not allow_wide:
+        return True
+    return strict and bool(warnings)
+
+
 def _process_single_item(
     item: Dict[str, Any],
     *,
@@ -69,6 +78,8 @@ def _process_single_item(
     defaults: Dict[str, Any],
     dry_run: bool,
     overwrite: bool,
+    strict: bool = False,
+    allow_wide: bool = False,
 ) -> Dict[str, Any]:
     index_label = str(item.get("index", "item"))
     source = _resolve_source_path(str(item["source"]), base_dir)
@@ -119,15 +130,18 @@ def _process_single_item(
             output_size=target_size,
             fit_mode=fit_mode,
         )
-        if not dry_run:
+        approved = bool(item.get("approved", False))
+        hold = _should_hold_item(info["warnings"], approved=approved, allow_wide=allow_wide, strict=strict)
+        if not dry_run and not hold:
             out_dir.mkdir(parents=True, exist_ok=True)
             target_path.write_bytes(content)
+        status = "needs_decision" if hold else ("planned" if dry_run else "ok")
         return {
             "index": index_label,
             "kind": kind,
             "source": str(source),
             "output": str(target_path),
-            "status": "planned" if dry_run else "ok",
+            "status": status,
             "src_width": info["width"],
             "src_height": info["height"],
             "out_width": info["out_width"],
@@ -154,7 +168,9 @@ def _process_single_item(
         fit_mode=fit_mode,
     )
     target_path = _next_output_path(out_dir, index_label, out_ext, overwrite=overwrite)
-    if not dry_run:
+    approved = bool(item.get("approved", False))
+    hold = _should_hold_item(geometry["warnings"], approved=approved, allow_wide=allow_wide, strict=strict)
+    if not dry_run and not hold:
         content, _ = engine.extract_frame(
             str(source),
             min(max(0.0, seconds), meta["duration"] or seconds),
@@ -170,12 +186,13 @@ def _process_single_item(
         )
         out_dir.mkdir(parents=True, exist_ok=True)
         target_path.write_bytes(content)
+    status = "needs_decision" if hold else ("planned" if dry_run else "ok")
     return {
         "index": index_label,
         "kind": kind,
         "source": str(source),
         "output": str(target_path),
-        "status": "planned" if dry_run else "ok",
+        "status": status,
         "time": seconds,
         "src_width": meta["width"],
         "src_height": meta["height"],
@@ -193,11 +210,14 @@ def run_batch(
     defaults: Dict[str, Any],
     dry_run: bool = False,
     overwrite: bool = False,
+    strict: bool = False,
+    allow_wide: bool = False,
 ) -> Dict[str, Any]:
     """Executa ou simula (dry_run) o processamento em lote preservando originais intactos."""
     resolved_out = _resolve_target_dir(str(output_dir))
     results: List[Dict[str, Any]] = []
     warnings_count = 0
+    needs_decision_count = 0
     errors_count = 0
 
     for pos, raw_item in enumerate(items, start=1):
@@ -211,8 +231,12 @@ def run_batch(
                 defaults=defaults,
                 dry_run=dry_run,
                 overwrite=overwrite,
+                strict=strict,
+                allow_wide=allow_wide,
             )
             warnings_count += len(entry.get("warnings") or [])
+            if entry.get("status") == "needs_decision":
+                needs_decision_count += 1
         except Exception as exc:
             errors_count += 1
             entry = {
@@ -228,7 +252,8 @@ def run_batch(
         "output_dir": str(resolved_out),
         "dry_run": dry_run,
         "total": len(items),
-        "processed": len(items) - errors_count,
+        "processed": len(items) - errors_count - needs_decision_count,
+        "needs_decision_count": needs_decision_count,
         "warnings_count": warnings_count,
         "errors_count": errors_count,
         "items": results,
@@ -279,7 +304,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-standardize", action="store_true", help="Mantém a resolução nativa do corte sem escalar.")
     parser.add_argument("--dry-run", action="store_true", help="Valida e calcula dimensões/alertas sem gravar.")
     parser.add_argument("--overwrite", action="store_true", help="Permite sobrescrever arquivos com o mesmo índice.")
-    parser.add_argument("--strict", action="store_true", help="Sai com código 2 se houver avisos wide_crop/low_resolution.")
+    parser.add_argument("--strict", action="store_true", help="Pausa também em avisos low_resolution e retorna código 2.")
+    parser.add_argument("--allow-wide", action="store_true", help="Exporta fotos wide_crop (16:9) sem pausar para decisão.")
     return parser
 
 
@@ -329,6 +355,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             defaults=defaults,
             dry_run=dry_run,
             overwrite=overwrite,
+            strict=args.strict,
+            allow_wide=args.allow_wide,
         )
     except ValueError as exc:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False))
@@ -337,7 +365,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if report["errors_count"] > 0:
         return 1
-    if args.strict and report["warnings_count"] > 0:
+    if report["needs_decision_count"] > 0 or (args.strict and report["warnings_count"] > 0):
         return 2
     return 0
 
