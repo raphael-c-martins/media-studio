@@ -19,15 +19,16 @@ export class Gallery {
     $('#frame-modal-download').addEventListener('click', () => this.current && this.download(this.current));
   }
 
-  /** @param {{blob: Blob, time: number, timeLabel: string, width: number, height: number}} frame */
+  /** @param {{blob: Blob, time: number, timeLabel: string, width: number, height: number, filename?: string, zipName?: string}} frame */
   add(frame) {
     const ext = EXTENSIONS[frame.blob.type] || 'png';
+    const fallbackName = `frame_${timeForFilename(frame.time)}.${ext}`;
     const item = {
       ...frame,
       id: crypto.randomUUID(),
       ext,
       url: URL.createObjectURL(frame.blob),
-      filename: `frame_${timeForFilename(frame.time)}.${ext}`,
+      filename: frame.filename || fallbackName,
     };
     this.frames.unshift(item);
     this.render();
@@ -66,10 +67,15 @@ export class Gallery {
       return;
     }
     const ordered = [...this.frames].sort((a, b) => a.time - b.time);
-    const files = ordered.map((frame, index) => ({
-      name: `frame_${String(index + 1).padStart(2, '0')}_${timeForFilename(frame.time)}.${frame.ext}`,
-      data: frame.blob,
-    }));
+    const usedNames = new Set();
+    const files = ordered.map((frame, index) => {
+      let name = frame.zipName || `frame_${String(index + 1).padStart(2, '0')}_${timeForFilename(frame.time)}.${frame.ext}`;
+      if (usedNames.has(name)) {
+        name = `${String(index + 1).padStart(2, '0')}_${name}`;
+      }
+      usedNames.add(name);
+      return { name, data: frame.blob };
+    });
     try {
       const zip = await createZip(files);
       const url = URL.createObjectURL(zip);

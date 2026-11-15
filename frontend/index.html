@@ -223,18 +223,18 @@
     <section class="view hidden" id="view-frames" data-view="frames" aria-labelledby="h-frames">
       <div class="view-head view-head-row">
         <div>
-          <h1 id="h-frames">Extrair frames</h1>
-          <p class="muted">Capture quadros em resolução original, com corte para redes sociais e sequência para carrossel.</p>
+          <h1 id="h-frames">Extrair frames e recortar fotos</h1>
+          <p class="muted">Capture quadros de vídeos ou prepare fotos (.HEIC, JPG, PNG) em 4:5 com foco no veículo.</p>
         </div>
         <div class="toolbar">
-          <button type="button" class="btn btn-secondary btn-sm hidden" id="btn-change-video">Trocar vídeo</button>
+          <button type="button" class="btn btn-secondary btn-sm hidden" id="btn-change-video">Trocar arquivo</button>
         </div>
       </div>
 
       <label class="dropzone" id="dropzone" for="video-file">
-        <input type="file" id="video-file" class="sr-only" accept=".mp4,.mov,.mkv,.webm,.m4v,.avi,video/*">
-        <strong>Arraste um vídeo para cá ou clique para escolher</strong>
-        <span class="muted">MP4, MOV, MKV, WebM, M4V ou AVI. O processamento acontece neste computador.</span>
+        <input type="file" id="video-file" class="sr-only" accept=".mp4,.mov,.mkv,.webm,.m4v,.avi,.ogg,.jpg,.jpeg,.png,.webp,.heic,.heif,video/*,image/*">
+        <strong>Arraste um vídeo ou foto para cá ou clique para escolher</strong>
+        <span class="muted">Vídeos (MP4, MOV, MKV, WebM, AVI) ou fotos (JPG, PNG, WebP, HEIC). Tudo processado neste computador.</span>
         <span class="dropzone-status mono hidden" id="upload-status"></span>
       </label>
 
@@ -242,8 +242,8 @@
         <div class="meta-bar">
           <span><span class="muted">Arquivo</span> <strong id="meta-filename">-</strong></span>
           <span><span class="muted">Resolução</span> <strong class="mono" id="meta-resolution">-</strong></span>
-          <span><span class="muted">Duração</span> <strong class="mono" id="meta-duration">-</strong></span>
-          <label class="inline-field">
+          <span id="meta-duration-wrap"><span class="muted" id="meta-duration-label">Duração</span> <strong class="mono" id="meta-duration">-</strong></span>
+          <label class="inline-field" id="meta-fps-wrap">
             <span class="muted">FPS</span>
             <select id="select-fps" class="input input-sm">
               <option value="24">24</option>
@@ -258,15 +258,17 @@
         <div class="studio">
           <div class="player-col">
             <div class="player" id="player">
-              <img id="frame-view" alt="Quadro atual do vídeo">
-              <div class="crop-guide hidden" id="crop-guide"></div>
+              <img id="frame-view" alt="Prévia atual da mídia">
+              <div class="crop-guide hidden" id="crop-guide" title="Arraste para mover o foco do recorte">
+                <span class="crop-guide-dot" aria-hidden="true"></span>
+              </div>
               <div class="loupe hidden" id="loupe">
                 <canvas id="loupe-canvas" width="180" height="180"></canvas>
                 <span class="loupe-zoom mono" id="loupe-zoom">2.5x</span>
               </div>
             </div>
 
-            <div class="timeline">
+            <div class="timeline" id="timeline-box">
               <div class="timeline-head mono">
                 <span><span id="time-current">00:00:00.000</span> <span class="muted">/ <span id="time-total">00:00:00.000</span></span></span>
                 <span class="muted">Quadro <span id="frame-current">0</span> / <span id="frame-total">0</span></span>
@@ -299,11 +301,15 @@
                 <button type="button" class="btn btn-secondary btn-sm" id="btn-loupe" aria-pressed="false">Lupa</button>
               </div>
             </div>
+            <div class="toolbar hidden" id="image-tools">
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-loupe-image" aria-pressed="false">Lupa</button>
+              <span class="muted small">Clique na foto ou arraste o retângulo laranja para ajustar o foco.</span>
+            </div>
           </div>
 
           <aside class="side-col">
             <div class="panel">
-              <h3 class="panel-title">Captura</h3>
+              <h3 class="panel-title">Captura e recorte</h3>
               <div class="field">
                 <label for="select-format">Formato</label>
                 <select id="select-format" class="input">
@@ -315,18 +321,40 @@
               <div class="field">
                 <label for="select-aspect">Proporção</label>
                 <select id="select-aspect" class="input">
-                  <option value="original">Original do vídeo</option>
-                  <option value="16:9">16:9 (capa, paisagem)</option>
-                  <option value="9:16">9:16 (Reels, Stories, TikTok)</option>
+                  <option value="original">Original</option>
+                  <option value="4:5">4:5 (feed retrato 1080x1350)</option>
                   <option value="1:1">1:1 (feed quadrado)</option>
-                  <option value="4:5">4:5 (feed retrato)</option>
+                  <option value="9:16">9:16 (Reels, Stories, TikTok)</option>
+                  <option value="16:9">16:9 (capa, paisagem)</option>
                 </select>
-                <small class="muted">O corte é centralizado e mantém a resolução máxima.</small>
               </div>
+              <div class="field" id="field-fit-mode">
+                <label for="select-fit-mode">Enquadramento</label>
+                <select id="select-fit-mode" class="input">
+                  <option value="crop">Recorte preenchido (padrão)</option>
+                  <option value="contain_blur">Inteiro com fundo desfocado</option>
+                </select>
+              </div>
+              <label class="check">
+                <input type="checkbox" id="check-standardize">
+                <span>Padronizar feed (ex.: 1080x1350)</span>
+              </label>
+              <div class="field" id="field-focus-controls">
+                <div class="focus-head">
+                  <label for="range-zoom">Zoom e ponto focal</label>
+                  <button type="button" class="btn-link small" id="btn-focus-reset">Centralizar</button>
+                </div>
+                <div class="focus-row">
+                  <input type="range" id="range-zoom" min="1" max="4" step="0.05" value="1">
+                  <span class="mono small" id="zoom-value">1.00x</span>
+                </div>
+                <small class="muted mono" id="focus-value">Foco: 50%, 50%</small>
+              </div>
+              <p class="crop-warning hidden" id="crop-warning"></p>
               <button type="button" class="btn btn-primary btn-block" id="btn-capture">Capturar quadro</button>
             </div>
 
-            <div class="panel">
+            <div class="panel" id="panel-burst">
               <h3 class="panel-title">Sequência para carrossel</h3>
               <p class="muted small">Marque o início e o fim do trecho e extraia várias fotos de uma vez.</p>
               <div class="burst-points">
@@ -354,7 +382,7 @@
               <button type="button" class="btn btn-secondary btn-block" id="btn-burst">Extrair sequência</button>
             </div>
 
-            <div class="panel">
+            <div class="panel" id="panel-samples-box">
               <h3 class="panel-title">Sugestões automáticas</h3>
               <p class="muted small">Gera miniaturas espalhadas pelo vídeo para achar os melhores ângulos.</p>
               <div class="field">

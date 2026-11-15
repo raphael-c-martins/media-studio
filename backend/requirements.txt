@@ -12,3 +12,5 @@ static-ffmpeg==3.0
 opencv-python-headless==4.11.0.86
 av==15.1.0
 numpy==2.4.4
+pillow==13.0.0
+pillow-heif==1.8.1

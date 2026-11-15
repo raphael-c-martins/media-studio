@@ -1,24 +1,19 @@
 import asyncio
 import logging
-import os
-import tempfile
 from pathlib import Path
-from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import Response
 
 from app import config
 from app.frames import engine
-from app.frames.registry import VideoSession, registry
+from app.frames.registry import VideoSession, image_registry, registry
+from app.frames.uploads import AspectRatio, FitMode, ImageFormat, save_temp_upload
 
 logger = logging.getLogger("media_studio.frames")
 router = APIRouter(prefix="/api/frames", tags=["Frames"])
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi", ".ogg"}
-ImageFormat = Literal["png", "jpeg", "webp"]
-AspectRatio = Literal["original", "16:9", "9:16", "1:1", "4:5"]
-CHUNK_SIZE = 4 * 1024 * 1024
 
 
 def _session_or_404(video_id: str) -> VideoSession:
@@ -36,35 +31,17 @@ def _index_in_background(session: VideoSession) -> None:
         logger.warning("Indexação de prévias falhou para %s: %s", session.filename, exc)
 
 
-async def _save_upload(file: UploadFile, request: Request) -> Path:
-    declared = int(request.headers.get("content-length") or 0)
-    if declared > config.MAX_VIDEO_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="O vídeo passa do tamanho máximo permitido.")
-
-    suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in VIDEO_EXTENSIONS:
-        raise HTTPException(status_code=415, detail="Formato não suportado. Use MP4, MOV, MKV, WebM, M4V ou AVI.")
-
-    fd, temp_name = tempfile.mkstemp(prefix="ms_", suffix=suffix, dir=config.FRAMES_CACHE_DIR)
-    os.close(fd)
-    destination = Path(temp_name)
-    total = 0
-    try:
-        with destination.open("wb") as handle:
-            while chunk := await file.read(CHUNK_SIZE):
-                total += len(chunk)
-                if total > config.MAX_VIDEO_UPLOAD_BYTES:
-                    raise HTTPException(status_code=413, detail="O vídeo passa do tamanho máximo permitido.")
-                await asyncio.to_thread(handle.write, chunk)
-    except BaseException:
-        destination.unlink(missing_ok=True)
-        raise
-    return destination
-
-
 @router.post("/videos")
 async def upload_video(request: Request, background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    path = await _save_upload(file, request)
+    path = await save_temp_upload(
+        file,
+        request,
+        VIDEO_EXTENSIONS,
+        config.MAX_VIDEO_UPLOAD_BYTES,
+        prefix="ms_",
+        unsupported_detail="Formato não suportado. Use MP4, MOV, MKV, WebM, M4V ou AVI.",
+        too_large_detail="O vídeo passa do tamanho máximo permitido.",
+    )
     try:
         meta = await asyncio.to_thread(engine.probe_video, str(path))
     except ValueError as exc:
@@ -113,17 +90,73 @@ async def get_preview(video_id: str, time: float = Query(0.0, ge=0)):
     return Response(content=content, media_type="image/jpeg")
 
 
-@router.get("/videos/{video_id}/frame")
-async def get_frame(video_id: str, time: float = Query(0.0, ge=0), format: ImageFormat = "png",
-                    aspect_ratio: AspectRatio = "original"):
+@router.get("/videos/{video_id}/analyze")
+async def analyze_video_crop(
+    video_id: str,
+    aspect_ratio: AspectRatio = "original",
+    focus_x: float = Query(0.5, ge=0.0, le=1.0),
+    focus_y: float = Query(0.5, ge=0.0, le=1.0),
+    zoom: float = Query(1.0, ge=1.0, le=4.0),
+    standardize: bool = False,
+    fit_mode: FitMode = "crop",
+):
     session = _session_or_404(video_id)
+    output_size = engine.resolve_output_size(aspect_ratio, standardize=standardize)
+    return engine.analyze_crop_geometry(
+        session.width,
+        session.height,
+        aspect_ratio,
+        focus_x=focus_x,
+        focus_y=focus_y,
+        zoom=zoom,
+        output_size=output_size,
+        fit_mode=fit_mode,
+    )
+
+
+@router.get("/videos/{video_id}/frame")
+async def get_frame(
+    video_id: str,
+    time: float = Query(0.0, ge=0),
+    format: ImageFormat = "png",
+    aspect_ratio: AspectRatio = "original",
+    focus_x: float = Query(0.5, ge=0.0, le=1.0),
+    focus_y: float = Query(0.5, ge=0.0, le=1.0),
+    zoom: float = Query(1.0, ge=1.0, le=4.0),
+    standardize: bool = False,
+    fit_mode: FitMode = "crop",
+):
+    session = _session_or_404(video_id)
+    output_size = engine.resolve_output_size(aspect_ratio, standardize=standardize)
+    geom = engine.analyze_crop_geometry(
+        session.width,
+        session.height,
+        aspect_ratio,
+        focus_x=focus_x,
+        focus_y=focus_y,
+        zoom=zoom,
+        output_size=output_size,
+        fit_mode=fit_mode,
+    )
     try:
         content, mime = await asyncio.to_thread(
-            engine.extract_frame, str(session.path), min(time, session.duration), session.rotation, format, aspect_ratio
+            engine.extract_frame,
+            str(session.path),
+            min(time, session.duration),
+            session.rotation,
+            format,
+            aspect_ratio,
+            focus_x,
+            focus_y,
+            zoom,
+            standardize,
+            output_size,
+            fit_mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return Response(content=content, media_type=mime)
+    headers = {"X-Crop-Warnings": ",".join(geom["warnings"])} if geom["warnings"] else {}
+    return Response(content=content, media_type=mime, headers=headers)
 
 
 @router.get("/videos/{video_id}/samples")
@@ -138,14 +171,37 @@ async def get_samples(video_id: str, count: int = Query(12, ge=1, le=48)):
 
 
 @router.get("/videos/{video_id}/burst")
-async def get_burst(video_id: str, start: float = Query(0.0, ge=0), end: float = Query(0.0, ge=0),
-                    count: int = Query(6, ge=2, le=30), format: ImageFormat = "jpeg",
-                    aspect_ratio: AspectRatio = "original"):
+async def get_burst(
+    video_id: str,
+    start: float = Query(0.0, ge=0),
+    end: float = Query(0.0, ge=0),
+    count: int = Query(6, ge=2, le=30),
+    format: ImageFormat = "jpeg",
+    aspect_ratio: AspectRatio = "original",
+    focus_x: float = Query(0.5, ge=0.0, le=1.0),
+    focus_y: float = Query(0.5, ge=0.0, le=1.0),
+    zoom: float = Query(1.0, ge=1.0, le=4.0),
+    standardize: bool = False,
+    fit_mode: FitMode = "crop",
+):
     session = _session_or_404(video_id)
     end = session.duration if end <= start or end > session.duration else end
     start = min(start, end)
     frames = await asyncio.to_thread(
-        engine.extract_burst, str(session.path), session.rotation, start, end, count, format, aspect_ratio
+        engine.extract_burst,
+        str(session.path),
+        session.rotation,
+        start,
+        end,
+        count,
+        format,
+        aspect_ratio,
+        focus_x,
+        focus_y,
+        zoom,
+        standardize,
+        None,
+        fit_mode,
     )
     return {"frames": frames}
 
@@ -153,6 +209,11 @@ async def get_burst(video_id: str, start: float = Query(0.0, ge=0), end: float =
 async def cleanup_loop(interval_seconds: int = 300) -> None:
     while True:
         await asyncio.sleep(interval_seconds)
-        expired = registry.expire_idle()
-        if expired:
-            logger.info("Sessões de vídeo encerradas por inatividade: %s", expired)
+        expired_videos = registry.expire_idle()
+        expired_images = image_registry.expire_idle()
+        if expired_videos or expired_images:
+            logger.info(
+                "Sessões encerradas por inatividade: %s vídeo(s), %s imagem(ns)",
+                expired_videos,
+                expired_images,
+            )
