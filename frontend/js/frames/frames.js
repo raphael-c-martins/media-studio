@@ -501,7 +501,9 @@ function updateCropGuide() {
   const geom = computeCropBox(width, height, aspect, state.focusX, state.focusY, state.zoom);
   updateCropWarning(geom, aspect, fitMode, standardize);
 
-  const showBox = Boolean(view.clientWidth && geom && ((ratio && fitMode === 'crop') || state.zoom > 1.0));
+  // Modo contain_blur preserva a foto inteira sem corte; oculta a guia mesmo se o zoom anterior estiver > 1x.
+  const isContainBlur = fitMode === 'contain_blur' && Boolean(ratio);
+  const showBox = Boolean(view.clientWidth && geom && !isContainBlur && (ratio || state.zoom > 1.0));
   if (!showBox) {
     show(guide, false);
     return;

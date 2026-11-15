@@ -61,8 +61,10 @@ media-studio/
 │   │   ├── downloads/         # yt-dlp, Instagram, fila, histórico, configurações
 │   │   └── frames/            # extrator: motor OpenCV/PyAV/Pillow, sessões, uploads, CLI em lote e rotas (vídeo + foto/HEIC)
 #   engine.py, image_engine.py, uploads.py, registry.py, routes.py, image_routes.py, batch_cli.py
-│   ├── tests/                 # testes automatizados (pytest)
-│   └── requirements.txt
+│   ├── tests/                 # testes automatizados de backend (pytest)
+│   ├── e2e/                   # testes E2E no navegador headless (Playwright)
+│   ├── requirements.txt
+│   └── requirements-e2e.txt
 ├── frontend/                  # HTML, CSS e módulos JS (sem build)
 ├── docs/                      # históricos dos projetos originais e ideias
 ├── data/                      # banco local (fora do Git)
@@ -78,7 +80,17 @@ cd backend
 ..\.venv\Scripts\python.exe -m pytest
 ```
 
-Os testes usam banco, logs e pastas temporárias, nunca os dados reais.
+Testes de navegador ponta a ponta (E2E em Chromium invisível, sem abrir janela na tela):
+
+```powershell
+.venv\Scripts\python.exe -m pip install -r backend\requirements-e2e.txt
+# Caso o navegador ainda não esteja no cache local do Playwright (%LOCALAPPDATA%\ms-playwright):
+.venv\Scripts\playwright.exe install chromium
+cd backend
+..\.venv\Scripts\python.exe -m pytest e2e -v
+```
+
+Os testes (unitários e E2E) sobem tudo de forma isolada com banco, logs e pastas temporárias, nunca tocando nos dados reais. As skills globais de QA (`/qa-test` e `/qa-sheets-sync`) permanecem centralizadas no `antigravity-config`, sem duplicação dentro do projeto.
 
 ## Licença
 

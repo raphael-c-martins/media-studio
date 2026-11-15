@@ -19,6 +19,11 @@ Registro das decisões do projeto. O histórico completo de cada ferramenta ante
 
 ## Linha do tempo
 
+### [14/11/2026] - Testes ponta a ponta (E2E) com Playwright headless e ajuste de guia em contain_blur
+- Adicionada suíte E2E dedicada em `backend/e2e/` (`conftest.py` e `test_frames_e2e.py`) usando `playwright==1.64.1` (`backend/requirements-e2e.txt`), separada dos testes rápidos de backend (`testpaths = tests`) para não quebrar o CI do GitHub Actions com download de navegador.
+- A suíte sobe um servidor Uvicorn temporário em porta livre de `127.0.0.1` com `MS_DATA_DIR`, `MS_LOGS_DIR`, `MS_DOWNLOADS_DIR` e `MS_TEMP_DIR` isolados, abre o Chromium estritamente em modo `headless` (reaproveitando o cache local em `%LOCALAPPDATA%\ms-playwright` sem abrir janelas visíveis), audita erros de console JS, exceções não tratadas e respostas HTTP `>= 400`, e garante encerramento limpo do navegador e do servidor temporário ao final.
+- **Correção descoberta pelo Playwright real (`frontend/js/frames/frames.js`):** ao alternar **Enquadramento** para `contain_blur` com zoom anterior maior que `1.00x`, a guia laranja (`#crop-guide`) continuava aparecendo sobre a imagem apesar de o backend manter a foto inteira sem corte. Ajustado `updateCropGuide()` para ocultar a guia sempre que `contain_blur` estiver ativo para uma proporção fixa.
+
 ### [14/11/2026] - Preparo de fotos (.HEIC), EXIF e recorte por ponto focal (4:5)
 - Adicionado suporte completo a fotos estáticas (`JPG`, `PNG`, `WebP`, `.HEIC`/`.HEIF`) via `pillow==13.0.0` e `pillow-heif==1.8.1`, com leitura segura de caminhos Unicode no Windows, transposição obrigatória de rotação `EXIF`, conversão de perfil de cor (ex.: `Display P3` para `sRGB`) e limite configurável contra bombas de pixels (`MS_MAX_IMAGE_PIXELS`, padrão `120000000`, nunca ilimitado).
 - Adicionado recorte inteligente por ponto focal (`focus_x`, `focus_y`), `zoom` (`1.0` a `4.0`), padronização opcional de resolução para Instagram (ex.: `1080x1350` em `4:5` usando `INTER_AREA`/`INTER_LANCZOS4`), modo `contain_blur` (fundo desfocado sem cortar bordas do veículo) e avisos automáticos de geometria (`wide_crop` e `low_resolution`).
