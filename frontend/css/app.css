@@ -249,9 +249,18 @@ select.input { padding-right: 6px; }
 .meta-bar { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center; padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
 .studio { display: grid; grid-template-columns: 1fr 300px; gap: var(--gap); margin-top: var(--gap); }
 .player-col, .side-col { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
-.player { position: relative; background: #000; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; min-height: 320px; max-height: 64vh; overflow: hidden; }
+.player { position: relative; background: #000; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; min-height: 320px; max-height: 64vh; overflow: hidden; user-select: none; }
 .player img { max-width: 100%; max-height: 64vh; object-fit: contain; cursor: pointer; }
-.crop-guide { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 100vmax rgba(0,0,0,.5); pointer-events: none; }
+.player.photo-mode img { cursor: crosshair; }
+.crop-guide { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 100vmax rgba(0,0,0,.5); pointer-events: auto; cursor: grab; touch-action: none; }
+.crop-guide.dragging { cursor: grabbing; }
+.crop-guide-dot { position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 1.5px solid #fff; transform: translate(-50%, -50%); pointer-events: none; }
+.player.loupe-active .crop-guide { pointer-events: none; }
+.focus-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.focus-head label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.focus-row { display: flex; align-items: center; gap: 8px; }
+.focus-row input[type="range"] { flex: 1; accent-color: var(--accent); margin: 0; }
+.crop-warning { padding: 8px 10px; font-size: 12px; background: var(--surface-2); border: 1px solid var(--border-strong); border-left: 3px solid var(--warning); border-radius: var(--radius); color: var(--text); }
 .loupe { position: absolute; width: 180px; height: 180px; border: 2px solid #fff; border-radius: 50%; overflow: hidden; pointer-events: none; transform: translate(-50%, -50%); }
 .loupe canvas { width: 100%; height: 100%; }
 .loupe-zoom { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.75); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 3px; }
@@ -263,7 +272,7 @@ select.input { padding-right: 6px; }
 .marker { position: absolute; top: -3px; width: 2px; height: 22px; background: var(--accent); }
 .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; }
 #btn-play { min-width: 120px; }
-#btn-loupe[aria-pressed="true"] { background: var(--text); color: var(--surface); }
+#btn-loupe[aria-pressed="true"], #btn-loupe-image[aria-pressed="true"] { background: var(--text); color: var(--surface); }
 .burst-points { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .burst-points > div { display: flex; flex-direction: column; gap: 4px; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
 .thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }

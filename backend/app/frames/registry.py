@@ -1,15 +1,14 @@
-"""Sessões de vídeo abertas no extrator de frames.
+"""Sessões temporárias de vídeo e foto abertas no extrator/editor de frames.
 
-Cada vídeo enviado vira um arquivo temporário e um cache de prévias em memória.
-Sessões sem uso por mais que FRAME_SESSION_TTL_SECONDS são encerradas e o
-arquivo temporário é apagado. Há também um limite de sessões simultâneas.
+Cada arquivo enviado vira um temporário em cache até ser fechado, expirar por
+inatividade ou ser descartado pelo limite simultâneo de sessões.
 """
 import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, Generic, List, Optional, TypeVar
 
 from app import config
 
@@ -32,39 +31,76 @@ class VideoSession:
     closed: bool = False
     last_access: float = field(default_factory=time.monotonic)
 
+    @property
+    def session_id(self) -> str:
+        return self.video_id
+
     def touch(self) -> None:
         self.last_access = time.monotonic()
 
+    def clear_memory(self) -> None:
+        self.preview_cache.clear()
 
-class SessionRegistry:
-    def __init__(self):
-        self._sessions: Dict[str, VideoSession] = {}
+
+@dataclass
+class ImageSession:
+    image_id: str
+    path: Path
+    filename: str
+    width: int
+    height: int
+    orientation: int
+    orientation_applied: bool
+    color_profile: str
+    preview_bytes: bytes = b""
+    closed: bool = False
+    last_access: float = field(default_factory=time.monotonic)
+
+    @property
+    def session_id(self) -> str:
+        return self.image_id
+
+    def touch(self) -> None:
+        self.last_access = time.monotonic()
+
+    def clear_memory(self) -> None:
+        self.preview_bytes = b""
+
+
+SessionT = TypeVar("SessionT", VideoSession, ImageSession)
+
+
+class SessionRegistry(Generic[SessionT]):
+    def __init__(self, max_sessions: Optional[Callable[[], int]] = None):
+        self._sessions: Dict[str, SessionT] = {}
         self._lock = threading.Lock()
+        self._max_sessions = max_sessions or (lambda: config.MAX_FRAME_SESSIONS)
 
     def __len__(self) -> int:
         return len(self._sessions)
 
-    def add(self, session: VideoSession) -> List[VideoSession]:
+    def add(self, session: SessionT) -> List[SessionT]:
         """Registra a sessão e devolve as que foram removidas para respeitar o limite."""
+        limit = max(1, int(self._max_sessions()))
         with self._lock:
-            self._sessions[session.video_id] = session
+            self._sessions[session.session_id] = session
             evicted = []
-            while len(self._sessions) > config.MAX_FRAME_SESSIONS:
+            while len(self._sessions) > limit:
                 oldest = min(self._sessions.values(), key=lambda s: s.last_access)
-                evicted.append(self._sessions.pop(oldest.video_id))
+                evicted.append(self._sessions.pop(oldest.session_id))
         for item in evicted:
             self._dispose(item)
         return evicted
 
-    def get(self, video_id: str) -> Optional[VideoSession]:
-        session = self._sessions.get(video_id)
+    def get(self, session_id: str) -> Optional[SessionT]:
+        session = self._sessions.get(session_id)
         if session:
             session.touch()
         return session
 
-    def remove(self, video_id: str) -> bool:
+    def remove(self, session_id: str) -> bool:
         with self._lock:
-            session = self._sessions.pop(video_id, None)
+            session = self._sessions.pop(session_id, None)
         if session:
             self._dispose(session)
         return session is not None
@@ -74,7 +110,7 @@ class SessionRegistry:
         with self._lock:
             expired = [s for s in self._sessions.values() if s.last_access < limit]
             for session in expired:
-                self._sessions.pop(session.video_id, None)
+                self._sessions.pop(session.session_id, None)
         for session in expired:
             self._dispose(session)
         return len(expired)
@@ -87,9 +123,9 @@ class SessionRegistry:
             self._dispose(session)
 
     @staticmethod
-    def _dispose(session: VideoSession) -> None:
+    def _dispose(session: SessionT) -> None:
         session.closed = True
-        session.preview_cache.clear()
+        session.clear_memory()
         try:
             session.path.unlink(missing_ok=True)
         except OSError as exc:
@@ -98,7 +134,7 @@ class SessionRegistry:
 
 
 def clear_cache_dir() -> int:
-    """Apaga sobras de vídeos temporários de execuções anteriores (só a pasta de cache do extrator)."""
+    """Apaga sobras de arquivos temporários de execuções anteriores (só a pasta de cache do extrator)."""
     removed = 0
     if not config.FRAMES_CACHE_DIR.exists():
         return 0
@@ -112,4 +148,5 @@ def clear_cache_dir() -> int:
     return removed
 
 
-registry = SessionRegistry()
+registry: SessionRegistry[VideoSession] = SessionRegistry(lambda: config.MAX_FRAME_SESSIONS)
+image_registry: SessionRegistry[ImageSession] = SessionRegistry(lambda: config.MAX_IMAGE_SESSIONS)

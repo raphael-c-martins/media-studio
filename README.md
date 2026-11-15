@@ -3,7 +3,7 @@
 Ferramenta local do Relíquias para preparar mídia para as redes. Junta em um só lugar os antigos **MediaDownloader Pro** e **FrameStudio (video-frame-extrator)**:
 
 - **Baixar**: vídeos, áudios e fotos do YouTube, Instagram (posts, Reels e carrosséis), X, TikTok e outros sites suportados pelo yt-dlp. Também lista as publicações de um perfil para baixar várias de uma vez.
-- **Frames**: abre um vídeo do computador e captura quadros em resolução original, com corte para 16:9, 9:16, 1:1 e 4:5, sequência para carrossel, sugestões automáticas e lupa de foco.
+- **Frames**: abre um vídeo ou foto do computador (JPG, PNG, WebP e `.HEIC`/`.HEIF`), aplica correção automática de rotação EXIF e cores para sRGB, permite mover o ponto focal e o zoom em tempo real, corta para 16:9, 9:16, 1:1 e 4:5 (com opção de padronizar para 1080x1350 ou encaixar sem cortes sobre fundo desfocado), além de gerar sequência para carrossel, sugestões automáticas, lupa de foco e processamento em lote via CLI (`python -m app.frames.batch_cli`).
 - **Histórico** dos downloads e **Configurações** (pasta de destino, qualidade padrão e tema claro/escuro).
 
 Tudo roda neste computador. Os vídeos enviados para o extrator não saem da máquina.
@@ -59,7 +59,8 @@ media-studio/
 │   │   ├── net_guard.py       # validação de links externos e downloads com limite
 │   │   ├── database.py        # SQLite com migrations incrementais
 │   │   ├── downloads/         # yt-dlp, Instagram, fila, histórico, configurações
-│   │   └── frames/            # extrator: motor OpenCV/PyAV, sessões e rotas
+│   │   └── frames/            # extrator: motor OpenCV/PyAV/Pillow, sessões, uploads, CLI em lote e rotas (vídeo + foto/HEIC)
+#   engine.py, image_engine.py, uploads.py, registry.py, routes.py, image_routes.py, batch_cli.py
 │   ├── tests/                 # testes automatizados (pytest)
 │   └── requirements.txt
 ├── frontend/                  # HTML, CSS e módulos JS (sem build)
@@ -82,3 +83,18 @@ Os testes usam banco, logs e pastas temporárias, nunca os dados reais.
 ## Licença
 
 MIT. Veja [LICENSE](LICENSE).
+
+## Preparo em lote de fotos e quadros (CLI)
+
+Com o ambiente virtual do backend ativo na pasta `backend/`:
+
+```bash
+python -m app.frames.batch_cli --manifest caminho/do/manifesto.json --dry-run
+python -m app.frames.batch_cli --manifest caminho/do/manifesto.json
+python -m app.frames.batch_cli --input-dir "./# Originais" --output-dir "./Saida" --aspect-ratio 4:5 --format png
+```
+
+Variáveis adicionais de ambiente para fotos estáticas:
+- `MS_MAX_IMAGE_MB` (padrão `100`): limite em MB por upload de imagem na rota `/api/frames/images`.
+- `MS_MAX_IMAGE_PIXELS` (padrão `120000000`): teto de segurança contra imagens gigantes/descompressão abusiva.
+- `MS_MAX_IMAGE_SESSIONS` (padrão `8`): máximo de fotos mantidas simultaneamente em sessão de memória.

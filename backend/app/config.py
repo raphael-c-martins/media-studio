@@ -29,14 +29,17 @@ LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 MAX_CONCURRENT_DOWNLOADS = int(os.getenv("MS_MAX_CONCURRENT_DOWNLOADS", "3"))
 
-# Limites de tamanho (em bytes)
+# Limites de tamanho (em bytes) e proteção contra image bombs
 MAX_VIDEO_UPLOAD_BYTES = int(os.getenv("MS_MAX_UPLOAD_MB", "4096")) * 1024 * 1024
+MAX_IMAGE_UPLOAD_BYTES = int(os.getenv("MS_MAX_IMAGE_MB", "100")) * 1024 * 1024
+MAX_IMAGE_PIXELS = int(os.getenv("MS_MAX_IMAGE_PIXELS", "120000000"))
 MAX_DIRECT_MEDIA_BYTES = int(os.getenv("MS_MAX_DIRECT_MEDIA_MB", "1024")) * 1024 * 1024
 MAX_THUMBNAIL_BYTES = 15 * 1024 * 1024
 
-# Sessões de vídeo do extrator de frames
+# Sessões de mídia do extrator
 FRAME_SESSION_TTL_SECONDS = int(os.getenv("MS_FRAME_SESSION_TTL_MIN", "30")) * 60
 MAX_FRAME_SESSIONS = int(os.getenv("MS_MAX_FRAME_SESSIONS", "4"))
+MAX_IMAGE_SESSIONS = int(os.getenv("MS_MAX_IMAGE_SESSIONS", "8"))
 
 
 def is_loopback_host(host: str) -> bool:
