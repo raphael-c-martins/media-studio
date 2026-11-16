@@ -19,6 +19,9 @@ Registro das decisões do projeto. O histórico completo de cada ferramenta ante
 
 ## Linha do tempo
 
+### [16/11/2026] - Capturas da interface adicionadas ao README
+- Incluídas 4 capturas da interface web em `docs/screenshots/` (`media1.png` a `media4.png`) exibindo as abas Baixar, Frames, Histórico e Configurações com dados fictícios de demonstração no `README.md`.
+
 ### [14/11/2026] - Testes ponta a ponta (E2E) com Playwright headless e ajuste de guia em contain_blur
 - Adicionada suíte E2E dedicada em `backend/e2e/` (`conftest.py` e `test_frames_e2e.py`) usando `playwright==1.64.1` (`backend/requirements-e2e.txt`), separada dos testes rápidos de backend (`testpaths = tests`) para não quebrar o CI do GitHub Actions com download de navegador.
 - A suíte sobe um servidor Uvicorn temporário em porta livre de `127.0.0.1` com `MS_DATA_DIR`, `MS_LOGS_DIR`, `MS_DOWNLOADS_DIR` e `MS_TEMP_DIR` isolados, abre o Chromium estritamente em modo `headless` (reaproveitando o cache local em `%LOCALAPPDATA%\ms-playwright` sem abrir janelas visíveis), audita erros de console JS, exceções não tratadas e respostas HTTP `>= 400`, e garante encerramento limpo do navegador e do servidor temporário ao final.

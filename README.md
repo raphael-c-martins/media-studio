@@ -8,6 +8,16 @@ Ferramenta local do Relíquias para preparar mídia para as redes. Junta em um s
 
 Tudo roda neste computador. Os vídeos enviados para o extrator não saem da máquina.
 
+## Capturas da Interface
+
+> Capturas geradas em ambiente isolado de demonstração.
+
+| Download de Mídia (YouTube / Instagram) | Extrator de Frames (Recorte 4:5 e Carrossel) |
+| :---: | :---: |
+| ![Baixar mídia](docs/screenshots/media1.png) | ![Extrator de frames](docs/screenshots/media2.png) |
+| **Histórico de Downloads** | **Configurações Locais** |
+| ![Histórico](docs/screenshots/media3.png) | ![Configurações](docs/screenshots/media4.png) |
+
 ## Como usar
 
 1. Dê dois cliques em `iniciar-servidor-local.bat`.
@@ -66,7 +76,7 @@ media-studio/
 │   ├── requirements.txt
 │   └── requirements-e2e.txt
 ├── frontend/                  # HTML, CSS e módulos JS (sem build)
-├── docs/                      # históricos dos projetos originais e ideias
+├── docs/                      # históricos dos projetos originais, ideias e capturas (screenshots/)
 ├── data/                      # banco local (fora do Git)
 ├── downloads/                 # pasta padrão dos downloads (fora do Git)
 ├── logs/                      # logs (fora do Git)
