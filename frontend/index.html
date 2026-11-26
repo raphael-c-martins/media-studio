@@ -262,6 +262,7 @@
               <div class="crop-guide hidden" id="crop-guide" title="Arraste para mover o foco do recorte">
                 <span class="crop-guide-dot" aria-hidden="true"></span>
               </div>
+              <div class="blur-overlay hidden" id="blur-overlay" aria-label="Máscaras de desfoque sobre o vídeo"></div>
               <div class="loupe hidden" id="loupe">
                 <canvas id="loupe-canvas" width="180" height="180"></canvas>
                 <span class="loupe-zoom mono" id="loupe-zoom">2.5x</span>
@@ -352,6 +353,77 @@
               </div>
               <p class="crop-warning hidden" id="crop-warning"></p>
               <button type="button" class="btn btn-primary btn-block" id="btn-capture">Capturar quadro</button>
+            </div>
+
+            <div class="panel hidden" id="panel-video-edit">
+              <div class="panel-head">
+                <h3 class="panel-title">Desfoque de placa e vídeo</h3>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-blur-clear" disabled>Limpar</button>
+              </div>
+              <p class="muted small">Pause onde a placa aparece, desenhe a caixa e acompanhe o movimento antes de exportar.</p>
+              <div class="panel-actions">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-blur-draw" aria-pressed="false">Marcar placa</button>
+              </div>
+              <div class="track-list hidden" id="blur-track-list"></div>
+
+              <div class="blur-controls hidden" id="blur-active-controls">
+                <div class="field">
+                  <label for="select-blur-style">Tipo de ocultação</label>
+                  <select id="select-blur-style" class="input">
+                    <option value="pixelate">Pixelizar (recomendado)</option>
+                    <option value="blur">Desfoque forte</option>
+                    <option value="solid">Cobertura sólida</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <div class="focus-head">
+                    <label for="range-blur-strength">Intensidade</label>
+                    <span class="mono small" id="blur-strength-value">16</span>
+                  </div>
+                  <input type="range" id="range-blur-strength" class="range-input" min="4" max="40" step="2" value="16">
+                </div>
+                <div class="field">
+                  <div class="focus-head">
+                    <label for="range-blur-margin">Margem extra</label>
+                    <span class="mono small" id="blur-margin-value">15%</span>
+                  </div>
+                  <input type="range" id="range-blur-margin" class="range-input" min="0" max="40" step="5" value="15">
+                </div>
+                <div class="blur-action-grid">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-blur-track-all">Rastrear vídeo</button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-blur-track-forward">Daqui pra frente</button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-blur-hide-from">Ocultar daqui</button>
+                  <button type="button" class="btn btn-secondary btn-sm hidden" id="btn-blur-next-low">Ponto incerto</button>
+                </div>
+                <small class="muted mono" id="blur-track-status"></small>
+              </div>
+
+              <hr class="panel-sep">
+              <div class="panel-head">
+                <strong class="small">Corte e áudio do MP4</strong>
+                <button type="button" class="btn-link small" id="btn-trim-reset">Vídeo inteiro</button>
+              </div>
+              <div class="burst-points">
+                <div>
+                  <span class="muted small">Início</span>
+                  <strong class="mono" id="trim-start">00:00.0</strong>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-trim-start">Marcar</button>
+                </div>
+                <div>
+                  <span class="muted small">Fim</span>
+                  <strong class="mono" id="trim-end">00:00.0</strong>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-trim-end">Marcar</button>
+                </div>
+              </div>
+              <label class="check">
+                <input type="checkbox" id="check-mute-audio">
+                <span>Silenciar áudio</span>
+              </label>
+              <label class="check">
+                <input type="checkbox" id="check-video-apply-crop">
+                <span>Aplicar recorte e proporção acima ao vídeo</span>
+              </label>
+              <button type="button" class="btn btn-primary btn-block" id="btn-export-video">Exportar vídeo (MP4)</button>
             </div>
 
             <div class="panel" id="panel-burst">
@@ -502,6 +574,25 @@
       </div>
       <div class="modal-body modal-image">
         <img id="frame-modal-img" alt="Quadro em resolução original">
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de visualização de vídeo exportado -->
+  <div class="modal hidden" id="video-export-modal" role="dialog" aria-modal="true" aria-labelledby="video-export-title">
+    <div class="modal-box modal-wide">
+      <div class="modal-head">
+        <div>
+          <h3 id="video-export-title">Vídeo exportado</h3>
+          <span class="muted small mono" id="video-export-info"></span>
+        </div>
+        <div class="panel-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-video-export-download">Baixar MP4</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-close-modal>Fechar</button>
+        </div>
+      </div>
+      <div class="modal-body modal-image">
+        <video id="video-export-preview" class="video-export-player" controls playsinline></video>
       </div>
     </div>
   </div>

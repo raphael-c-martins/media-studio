@@ -3,7 +3,7 @@
 Ferramenta local do Relíquias para preparar mídia para as redes. Junta em um só lugar os antigos **MediaDownloader Pro** e **FrameStudio (video-frame-extrator)**:
 
 - **Baixar**: vídeos, áudios e fotos do YouTube, Instagram (posts, Reels e carrosséis), X, TikTok e outros sites suportados pelo yt-dlp. Também lista as publicações de um perfil para baixar várias de uma vez.
-- **Frames**: abre um vídeo ou foto do computador (JPG, PNG, WebP e `.HEIC`/`.HEIF`), aplica correção automática de rotação EXIF e cores para sRGB, permite mover o ponto focal e o zoom em tempo real, corta para 16:9, 9:16, 1:1 e 4:5 (com opção de padronizar para 1080x1350 ou encaixar sem cortes sobre fundo desfocado), além de gerar sequência para carrossel, sugestões automáticas, lupa de foco e processamento em lote via CLI (`python -m app.frames.batch_cli`).
+- **Frames**: abre um vídeo ou foto do computador (JPG, PNG, WebP e `.HEIC`/`.HEIF`), aplica correção automática de rotação EXIF e cores para sRGB, permite mover o ponto focal e o zoom em tempo real, corta para 16:9, 9:16, 1:1 e 4:5 (com opção de padronizar para 1080x1350 ou encaixar sem cortes sobre fundo desfocado), além de gerar sequência para carrossel, sugestões automáticas, lupa de foco, processamento em lote via CLI (`python -m app.frames.batch_cli`) e **desfoque de placas em vídeos com rastreamento de movimento (motion track)**, corte temporal e silenciamento ou preservação de áudio na exportação em MP4.
 - **Histórico** dos downloads e **Configurações** (pasta de destino, qualidade padrão e tema claro/escuro).
 
 Tudo roda neste computador. Os vídeos enviados para o extrator não saem da máquina.
@@ -48,6 +48,10 @@ Requisitos: Windows 10/11 e Python 3.11. O FFmpeg é baixado automaticamente pel
 | `MS_FRAME_SESSION_TTL_MIN` | `30` | Minutos sem uso até liberar um vídeo do extrator |
 | `MS_MAX_FRAME_SESSIONS` | `4` | Vídeos abertos ao mesmo tempo no extrator |
 | `MS_MAX_CONCURRENT_DOWNLOADS` | `3` | Downloads simultâneos |
+| `MS_MAX_TRACK_SAMPLES` | `1800` | Máximo de quadros analisados por rastreamento de placa |
+| `MS_MAX_BACKWARD_BUFFER` | `600` | Máximo de quadros em memória ao rastrear para trás |
+| `MS_MAX_BLUR_TRACKS` | `10` | Limite de máscaras de desfoque simultâneas por vídeo |
+| `MS_MAX_EXPORT_DIMENSION` | `1920` | Teto do lado maior (px) ao exportar vídeo sem padronização |
 
 ## Segurança
 
@@ -69,8 +73,8 @@ media-studio/
 │   │   ├── net_guard.py       # validação de links externos e downloads com limite
 │   │   ├── database.py        # SQLite com migrations incrementais
 │   │   ├── downloads/         # yt-dlp, Instagram, fila, histórico, configurações
-│   │   └── frames/            # extrator: motor OpenCV/PyAV/Pillow, sessões, uploads, CLI em lote e rotas (vídeo + foto/HEIC)
-#   engine.py, image_engine.py, uploads.py, registry.py, routes.py, image_routes.py, batch_cli.py
+│   │   └── frames/            # extrator: motor OpenCV/PyAV/Pillow, rastreamento e exportação MP4, sessões, uploads, CLI em lote e rotas
+#   engine.py, image_engine.py, video_blur.py, uploads.py, registry.py, routes.py, image_routes.py, video_routes.py, batch_cli.py
 │   ├── tests/                 # testes automatizados de backend (pytest)
 │   ├── e2e/                   # testes E2E no navegador headless (Playwright)
 │   ├── requirements.txt
