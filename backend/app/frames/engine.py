@@ -224,6 +224,33 @@ def apply_aspect_ratio_crop(
     return cropped
 
 
+def orient_pyav_frame(image: np.ndarray, rotation: int) -> np.ndarray:
+    """Aplica metadado de rotação a quadros decodificados crus pelo PyAV (sem auto-rotação)."""
+    rot = int(rotation) % 360
+    if rot == 90:
+        return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+    if rot == 180:
+        return cv2.rotate(image, cv2.ROTATE_180)
+    if rot == 270:
+        return cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    return image
+
+
+def probe_pyav_rotation(path: str) -> int:
+    """Lê metadado de rotação via PyAV como fallback quando OpenCV não informa."""
+    try:
+        with av.open(path) as container:
+            if not container.streams.video:
+                return 0
+            stream = container.streams.video[0]
+            raw_rot = stream.metadata.get("rotate")
+            if raw_rot is not None:
+                return int(float(str(raw_rot).strip())) % 360
+    except Exception:
+        return 0
+    return 0
+
+
 def correct_orientation(image: np.ndarray, rotation: int) -> np.ndarray:
     if rotation == 90 and image.shape[0] < image.shape[1]:
         return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
@@ -280,8 +307,17 @@ def probe_video(path: str) -> Dict:
 
     if raw_width <= 0 or raw_height <= 0:
         raise ValueError("O arquivo enviado não parece ser um vídeo válido.")
+    if rotation == 0:
+        rotation = probe_pyav_rotation(path)
     width, height = (raw_height, raw_width) if rotation in (90, 270) and raw_width > raw_height else (raw_width, raw_height)
-    first_preview = encode_preview(correct_orientation(first_frame, rotation), 85) if ok and first_frame is not None else None
+    if rotation == 180:
+        # OpenCV com CAP_PROP_ORIENTATION_AUTO=1 já rotaciona 180°; usa PyAV para evitar dupla inversão.
+        try:
+            first_preview = encode_preview(orient_pyav_frame(read_frame(path, 0.0), rotation), 85)
+        except Exception:
+            first_preview = encode_preview(first_frame, 85) if ok and first_frame is not None else None
+    else:
+        first_preview = encode_preview(correct_orientation(first_frame, rotation), 85) if ok and first_frame is not None else None
     return {
         "rotation": rotation,
         "width": width,
@@ -305,7 +341,7 @@ def index_previews(path: str, rotation: int, cache: Dict[int, bytes], should_sto
             key = preview_key(seconds)
             if key in cache:
                 continue
-            image = correct_orientation(frame.to_ndarray(format="bgr24"), rotation)
+            image = orient_pyav_frame(frame.to_ndarray(format="bgr24"), rotation)
             cache[key] = encode_preview(image)
 
 
@@ -349,6 +385,33 @@ def read_preview_direct(path: str, seconds: float, rotation: int) -> bytes:
     if frame is None:
         raise ValueError("Não foi possível gerar a prévia.")
     return encode_preview(correct_orientation(frame, rotation))
+
+
+def read_preview_exact(path: str, seconds: float, rotation: int) -> Tuple[bytes, float]:
+    """Lê a prévia exatamente do quadro mais próximo de `seconds` via PyAV e devolve seu PTS."""
+    target = max(0.0, float(seconds))
+    try:
+        with av.open(path) as container:
+            stream = container.streams.video[0]
+            time_base = float(stream.time_base)
+            container.seek(int(target / time_base), stream=stream)
+            best, best_diff, best_pts = None, float("inf"), target
+            for frame in container.decode(stream):
+                current = float(frame.pts * time_base) if frame.pts is not None else 0.0
+                diff = abs(current - target)
+                if diff < best_diff:
+                    best, best_diff, best_pts = frame, diff, current
+                if current > target + 0.15:
+                    break
+            if best is not None:
+                image = orient_pyav_frame(best.to_ndarray(format="bgr24"), rotation)
+                return encode_preview(image), max(0.0, best_pts)
+    except Exception as exc:
+        logger.warning("PyAV exact preview falhou em %.3fs, usando OpenCV: %s", target, exc)
+    frame = _read_with_opencv(path, target)
+    if frame is None:
+        raise ValueError("Não foi possível gerar a prévia.")
+    return encode_preview(correct_orientation(frame, rotation)), target
 
 
 def extract_frame(

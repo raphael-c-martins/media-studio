@@ -7,7 +7,7 @@ from fastapi.responses import Response
 
 from app import config
 from app.frames import engine
-from app.frames.registry import VideoSession, image_registry, registry
+from app.frames.registry import VideoSession, cleanup_stale_exports, image_registry, registry
 from app.frames.uploads import AspectRatio, FitMode, ImageFormat, save_temp_upload
 
 logger = logging.getLogger("media_studio.frames")
@@ -73,21 +73,41 @@ async def close_video(video_id: str):
 
 
 @router.get("/videos/{video_id}/preview")
-async def get_preview(video_id: str, time: float = Query(0.0, ge=0)):
+async def get_preview(video_id: str, time: float = Query(0.0, ge=0), exact: bool = False):
     session = _session_or_404(video_id)
-    key = engine.preview_key(min(time, session.duration))
+    target_time = min(time, session.duration)
+    if exact:
+        try:
+            content, actual_time = await asyncio.to_thread(
+                engine.read_preview_exact, str(session.path), target_time, session.rotation
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return Response(content=content, media_type="image/jpeg", headers={"X-Frame-Time": f"{actual_time:.3f}"})
+
+    key = engine.preview_key(target_time)
     cache = session.preview_cache
     if key in cache:
-        return Response(content=cache[key], media_type="image/jpeg")
+        return Response(
+            content=cache[key],
+            media_type="image/jpeg",
+            headers={"X-Frame-Time": f"{key / engine.PREVIEW_STEP:.3f}"},
+        )
     if cache:
         nearest = min(list(cache.keys()), key=lambda k: abs(k - key))
         if abs(nearest - key) <= engine.PREVIEW_STEP or session.is_indexed:
-            return Response(content=cache[nearest], media_type="image/jpeg")
+            return Response(
+                content=cache[nearest],
+                media_type="image/jpeg",
+                headers={"X-Frame-Time": f"{nearest / engine.PREVIEW_STEP:.3f}"},
+            )
     try:
-        content = await asyncio.to_thread(engine.read_preview_direct, str(session.path), time, session.rotation)
+        content, actual_time = await asyncio.to_thread(
+            engine.read_preview_exact, str(session.path), target_time, session.rotation
+        )
     except ValueError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return Response(content=content, media_type="image/jpeg")
+    return Response(content=content, media_type="image/jpeg", headers={"X-Frame-Time": f"{actual_time:.3f}"})
 
 
 @router.get("/videos/{video_id}/analyze")
@@ -211,9 +231,11 @@ async def cleanup_loop(interval_seconds: int = 300) -> None:
         await asyncio.sleep(interval_seconds)
         expired_videos = registry.expire_idle()
         expired_images = image_registry.expire_idle()
-        if expired_videos or expired_images:
+        stale_exports = cleanup_stale_exports()
+        if expired_videos or expired_images or stale_exports:
             logger.info(
-                "Sessões encerradas por inatividade: %s vídeo(s), %s imagem(ns)",
+                "Sessões/temporários limpos por inatividade: %s vídeo(s), %s imagem(ns), %s exportação(ões)",
                 expired_videos,
                 expired_images,
+                stale_exports,
             )

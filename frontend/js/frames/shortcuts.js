@@ -6,7 +6,7 @@ const TYPING_TAGS = new Set(['INPUT', 'SELECT', 'TEXTAREA']);
 export function initShortcuts(actions, isActive) {
   window.addEventListener('keydown', (event) => {
     if (!isActive() || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-    if (TYPING_TAGS.has(event.target.tagName) && event.target.type !== 'range') return;
+    if (TYPING_TAGS.has(event.target.tagName) && event.target.id !== 'timeline') return;
 
     if (event.key === ' ') {
       event.preventDefault();

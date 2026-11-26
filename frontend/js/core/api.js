@@ -17,7 +17,7 @@ async function readError(response) {
   return `Erro ${response.status} ao falar com o servidor.`;
 }
 
-export async function request(path, { method = 'GET', json, body, timeout = 0, raw = false } = {}) {
+export async function request(path, { method = 'GET', json, body, timeout = 0, raw = false, signal } = {}) {
   const headers = {};
   if (!SAFE_METHODS.has(method)) headers['X-Media-Studio'] = '1';
   if (json !== undefined) {
@@ -26,15 +26,25 @@ export async function request(path, { method = 'GET', json, body, timeout = 0, r
   }
 
   const controller = new AbortController();
-  const timer = timeout ? setTimeout(() => controller.abort(), timeout) : null;
+  let timedOut = false;
+  const onExternalAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', onExternalAbort, { once: true });
+  }
+  const timer = timeout ? setTimeout(() => { timedOut = true; controller.abort(); }, timeout) : null;
   let response;
   try {
     response = await fetch(path, { method, headers, body, signal: controller.signal });
   } catch (err) {
-    if (err.name === 'AbortError') throw new ApiError('O servidor demorou demais para responder.', 0);
+    if (err.name === 'AbortError') {
+      if (signal?.aborted && !timedOut) throw err;
+      throw new ApiError('O servidor demorou demais para responder.', 0);
+    }
     throw new ApiError('Não foi possível falar com o servidor. Ele está ligado?', 0);
   } finally {
     if (timer) clearTimeout(timer);
+    if (signal) signal.removeEventListener('abort', onExternalAbort);
   }
 
   if (!response.ok) throw new ApiError(await readError(response), response.status);

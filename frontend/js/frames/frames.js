@@ -6,6 +6,7 @@ import { formatShortTime, formatTime, safeFilename } from '../core/format.js';
 import { toast } from '../core/toast.js';
 import { Gallery } from './gallery.js';
 import { initShortcuts } from './shortcuts.js';
+import { initVideoBlur } from './video-blur.js';
 
 const ASPECT_RATIOS = { '16:9': 16 / 9, '9:16': 9 / 16, '1:1': 1, '4:5': 4 / 5 };
 const VIDEO_PATTERN = /\.(mp4|mov|mkv|webm|m4v|avi|ogg)$/i;
@@ -34,6 +35,7 @@ const state = {
   dragging: null,
 };
 let gallery;
+let videoBlur;
 
 const videoPath = (suffix = '') => `/api/frames/videos/${encodeURIComponent(state.video.video_id)}${suffix}`;
 const imagePath = (suffix = '') => `/api/frames/images/${encodeURIComponent(state.image.image_id)}${suffix}`;
@@ -89,6 +91,7 @@ function getCropParams() {
 // ---------------------------------------------------------------- envio e modos
 
 async function closeCurrentMedia() {
+  if (videoBlur) videoBlur.reset();
   if (state.video) {
     const id = state.video.video_id;
     state.video = null;
@@ -107,10 +110,14 @@ function setModeUI(mode) {
   $('#player').classList.toggle('photo-mode', isImage);
   show($('#timeline-box'), !isImage);
   show($('#meta-fps-wrap'), !isImage);
+  show($('#panel-video-edit'), !isImage);
   show($('#panel-burst'), !isImage);
   show($('#panel-samples-box'), !isImage);
   show($('#image-tools'), isImage);
-  if (isImage) show($('#samples-panel'), false);
+  if (isImage) {
+    show($('#samples-panel'), false);
+    if (videoBlur) videoBlur.reset();
+  }
 
   $('#meta-duration-label').textContent = isImage ? 'Arquivo' : 'Duração';
   $('#btn-capture').textContent = isImage ? 'Exportar foto cortada' : 'Capturar quadro';
@@ -160,6 +167,7 @@ async function uploadVideoFile(file) {
   show($('#dropzone'), false);
   show($('#frames-workspace'), true);
   show($('#btn-change-video'), true);
+  if (videoBlur) videoBlur.onVideoLoaded(data);
   seek(0);
   toast.success('Vídeo carregado.');
   generateSamples();
@@ -235,13 +243,14 @@ function updateTimeline() {
   $('#timeline').value = state.time;
 }
 
-function loadPreview(time) {
+function loadPreview(time, exact = false) {
   if (state.fetching) {
-    state.pendingTime = time;
+    state.pendingTime = { time, exact };
     return;
   }
   state.fetching = true;
-  const url = `${videoPath('/preview')}?time=${time.toFixed(2)}`;
+  const needExact = exact || (!state.playing && videoBlur && (videoBlur.isDrawing() || videoBlur.hasTracks()));
+  const url = `${videoPath('/preview')}?time=${time.toFixed(3)}${needExact ? '&exact=true' : ''}`;
   const image = new Image();
   image.onload = () => {
     $('#frame-view').src = url;
@@ -249,18 +258,19 @@ function loadPreview(time) {
     if (state.pendingTime !== null) {
       const next = state.pendingTime;
       state.pendingTime = null;
-      loadPreview(next);
+      loadPreview(next.time, next.exact);
     }
   };
   image.onerror = () => { state.fetching = false; };
   image.src = url;
 }
 
-function seek(time) {
+function seek(time, options = {}) {
   if (state.mode !== 'video' || !state.video) return;
   state.time = Math.max(0, Math.min(time, state.video.duration));
   updateTimeline();
-  loadPreview(state.time);
+  if (videoBlur) videoBlur.onTimeChange();
+  loadPreview(state.time, Boolean(options.exact));
 }
 
 function play() {
@@ -515,6 +525,7 @@ function updateCropGuide() {
   guide.style.width = `${geom.cropW * scaleX}px`;
   guide.style.height = `${geom.cropH * scaleY}px`;
   show(guide, true);
+  if (videoBlur) videoBlur.syncOverlay();
 }
 
 function syncLoupeButtons() {
@@ -612,6 +623,7 @@ function initCropGuideDrag() {
 
 function closeModals() {
   $$('.modal').forEach((modal) => show(modal, false));
+  if (videoBlur) videoBlur.onModalClosed();
 }
 
 // ---------------------------------------------------------------- inicialização
@@ -624,6 +636,14 @@ export function setFramesActive(active) {
 export function initFrames() {
   gallery = new Gallery();
   gallery.render();
+  videoBlur = initVideoBlur({
+    getVideo: () => state.video,
+    getTime: () => state.time,
+    seek,
+    pause,
+    getCropParams,
+    getVideoPath: videoPath,
+  });
 
   const dropzone = $('#dropzone');
   dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
@@ -641,7 +661,7 @@ export function initFrames() {
   $$('[data-frames]').forEach((b) => b.addEventListener('click', () => seek(state.time + parseInt(b.dataset.frames, 10) / state.fps)));
   $('#btn-play').addEventListener('click', togglePlay);
   $('#frame-view').addEventListener('click', (e) => {
-    if (state.loupe) return;
+    if (state.loupe || (videoBlur && videoBlur.isDrawing())) return;
     if (state.mode === 'image' || e.shiftKey) {
       setFocusFromClientPoint(e.clientX, e.clientY);
       return;

@@ -13,7 +13,7 @@ from app import config
 from app.database import init_db, recover_interrupted_downloads
 from app.downloads import routes_download, routes_history, routes_info, routes_profile, routes_settings
 from app.downloads.queue_manager import queue_manager
-from app.frames import image_routes, routes as frames_routes
+from app.frames import image_routes, routes as frames_routes, video_routes
 from app.frames.registry import clear_cache_dir, image_registry, registry
 from app.routes_health import router as health_router
 from app.security import LocalAccessMiddleware
@@ -91,5 +91,6 @@ app.include_router(routes_settings.router)
 app.include_router(routes_profile.router)
 app.include_router(frames_routes.router)
 app.include_router(image_routes.router)
+app.include_router(video_routes.router)
 
 app.mount("/", StaticFiles(directory=config.FRONTEND_DIR, html=True), name="frontend")

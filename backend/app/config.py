@@ -41,6 +41,12 @@ FRAME_SESSION_TTL_SECONDS = int(os.getenv("MS_FRAME_SESSION_TTL_MIN", "30")) * 6
 MAX_FRAME_SESSIONS = int(os.getenv("MS_MAX_FRAME_SESSIONS", "4"))
 MAX_IMAGE_SESSIONS = int(os.getenv("MS_MAX_IMAGE_SESSIONS", "8"))
 
+# Rastreamento de placas e exportação de vídeo
+MAX_TRACK_SAMPLES = int(os.getenv("MS_MAX_TRACK_SAMPLES", "1800"))
+MAX_BACKWARD_BUFFER = int(os.getenv("MS_MAX_BACKWARD_BUFFER", "600"))
+MAX_BLUR_TRACKS = int(os.getenv("MS_MAX_BLUR_TRACKS", "10"))
+MAX_EXPORT_DIMENSION = int(os.getenv("MS_MAX_EXPORT_DIMENSION", "1920"))
+
 
 def is_loopback_host(host: str) -> bool:
     return host.strip("[]").lower() in LOOPBACK_HOSTS

@@ -28,12 +28,16 @@ def _write_heic(path: Path, width: int = 1600, height: int = 1200) -> Path:
 
 
 def _write_video_mp4(path: Path, width: int = 320, height: int = 240, frames: int = 15) -> Path:
-    """Cria vídeo .mp4 curto em pasta temporária."""
+    """Cria vídeo .mp4 curto em pasta temporária com retângulo de alto contraste móvel."""
     writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 10, (width, height))
     try:
         for index in range(frames):
-            frame = np.full((height, width, 3), (index * 15) % 255, dtype=np.uint8)
-            cv2.putText(frame, f"F{index}", (30, 140), cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 3)
+            frame = np.full((height, width, 3), (35, 42, 50), dtype=np.uint8)
+            cv2.putText(frame, f"F{index}", (16, 48), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (200, 200, 200), 2)
+            px = 64 + index * 6
+            py = 96
+            cv2.rectangle(frame, (px, py), (px + 72, py + 36), (242, 242, 246), -1)
+            cv2.rectangle(frame, (px + 8, py + 8), (px + 64, py + 28), (20, 20, 20), 2)
             writer.write(frame)
     finally:
         writer.release()
@@ -199,5 +203,57 @@ def test_extensao_raw_dng_exibe_toast_sem_erro_de_rede(page_with_telemetry, tmp_
     expect(toast_error).to_be_visible()
     expect(toast_error).to_contain_text("RAW (.dng)")
     expect(page.locator("#frames-workspace")).to_be_hidden()
+
+    _assert_clean_telemetry(telemetry)
+
+
+def test_fluxo_desfoque_placa_rastreamento_e_exportacao_mp4(page_with_telemetry, tmp_path):
+    page, telemetry, base_url = page_with_telemetry
+    video_path = _write_video_mp4(tmp_path / "placa_e2e.mp4")
+
+    page.goto(f"{base_url}/#frames", wait_until="networkidle")
+    page.locator("#video-file").set_input_files(str(video_path))
+
+    expect(page.locator("#panel-video-edit")).to_be_visible()
+    _wait_preview_loaded(page, r"/api/frames/videos/.+/preview")
+
+    page.locator("#btn-blur-draw").click()
+    expect(page.locator("#btn-blur-draw")).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("#blur-overlay")).to_be_visible()
+
+    overlay_box = page.locator("#blur-overlay").bounding_box()
+    assert overlay_box is not None and overlay_box["width"] > 0
+    x1 = overlay_box["x"] + overlay_box["width"] * 0.20
+    y1 = overlay_box["y"] + overlay_box["height"] * 0.40
+    x2 = overlay_box["x"] + overlay_box["width"] * 0.44
+    y2 = overlay_box["y"] + overlay_box["height"] * 0.56
+    page.mouse.move(x1, y1)
+    page.mouse.down()
+    page.mouse.move(x2, y2, steps=5)
+    page.mouse.up()
+
+    expect(page.locator("#blur-track-list .track-item")).to_have_count(1)
+    expect(page.locator("#blur-track-list .track-item")).to_contain_text("Placa 1")
+
+    page.locator("#btn-blur-track-all").click()
+    expect(page.locator("#blur-track-status")).to_contain_text("15")
+
+    page.locator("#check-mute-audio").check()
+    page.locator("#btn-export-video").click()
+
+    expect(page.locator("#video-export-modal")).to_be_visible()
+    expect(page.locator("#video-export-info")).to_contain_text("áudio silenciado")
+    expect(page.locator("#video-export-preview")).to_have_attribute("src", re.compile(r"^blob:"))
+
+    with page.expect_download() as download_info:
+        page.locator("#btn-video-export-download").click()
+    download = download_info.value
+    assert download.suggested_filename.endswith("_editado.mp4")
+    saved_mp4 = tmp_path / download.suggested_filename
+    download.save_as(str(saved_mp4))
+    assert saved_mp4.stat().st_size > 1000
+
+    page.keyboard.press("Escape")
+    expect(page.locator("#video-export-modal")).to_be_hidden()
 
     _assert_clean_telemetry(telemetry)

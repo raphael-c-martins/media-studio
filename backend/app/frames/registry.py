@@ -3,12 +3,13 @@
 Cada arquivo enviado vira um temporário em cache até ser fechado, expirar por
 inatividade ou ser descartado pelo limite simultâneo de sessões.
 """
+import contextlib
 import logging
 import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Generic, List, Optional, TypeVar
+from typing import Callable, Dict, Generic, Iterator, List, Optional, TypeVar
 
 from app import config
 
@@ -29,14 +30,34 @@ class VideoSession:
     preview_cache: Dict[int, bytes] = field(default_factory=dict)
     is_indexed: bool = False
     closed: bool = False
+    active_ops: int = 0
+    _op_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     last_access: float = field(default_factory=time.monotonic)
 
     @property
     def session_id(self) -> str:
         return self.video_id
 
+    @property
+    def is_busy(self) -> bool:
+        with self._op_lock:
+            return self.active_ops > 0
+
     def touch(self) -> None:
         self.last_access = time.monotonic()
+
+    @contextlib.contextmanager
+    def hold(self) -> Iterator[None]:
+        """Mantém a sessão protegida contra expiração ou evicção durante operação longa."""
+        with self._op_lock:
+            self.active_ops += 1
+            self.last_access = time.monotonic()
+        try:
+            yield
+        finally:
+            with self._op_lock:
+                self.active_ops = max(0, self.active_ops - 1)
+                self.last_access = time.monotonic()
 
     def clear_memory(self) -> None:
         self.preview_cache.clear()
@@ -86,7 +107,14 @@ class SessionRegistry(Generic[SessionT]):
             self._sessions[session.session_id] = session
             evicted = []
             while len(self._sessions) > limit:
-                oldest = min(self._sessions.values(), key=lambda s: s.last_access)
+                idle_candidates = [
+                    s for s in self._sessions.values()
+                    if s.session_id != session.session_id and not getattr(s, "is_busy", False)
+                ]
+                if not idle_candidates:
+                    logger.warning("Limite de sessões atingido com todas as antigas ocupadas; aguardando liberação.")
+                    break
+                oldest = min(idle_candidates, key=lambda s: s.last_access)
                 evicted.append(self._sessions.pop(oldest.session_id))
         for item in evicted:
             self._dispose(item)
@@ -108,7 +136,10 @@ class SessionRegistry(Generic[SessionT]):
     def expire_idle(self) -> int:
         limit = time.monotonic() - config.FRAME_SESSION_TTL_SECONDS
         with self._lock:
-            expired = [s for s in self._sessions.values() if s.last_access < limit]
+            expired = [
+                s for s in self._sessions.values()
+                if s.last_access < limit and not getattr(s, "is_busy", False)
+            ]
             for session in expired:
                 self._sessions.pop(session.session_id, None)
         for session in expired:
@@ -143,6 +174,23 @@ def clear_cache_dir() -> int:
             try:
                 item.unlink()
                 removed += 1
+            except OSError:
+                pass
+    return removed
+
+
+def cleanup_stale_exports(max_age_seconds: int = 1800) -> int:
+    """Remove MP4s temporários antigos deixados em FRAMES_CACHE_DIR (ex.: download abortado no Windows)."""
+    if not config.FRAMES_CACHE_DIR.exists():
+        return 0
+    cutoff = time.time() - max(60, int(max_age_seconds))
+    removed = 0
+    for item in config.FRAMES_CACHE_DIR.iterdir():
+        if item.is_file() and item.name.startswith("ms_exp_"):
+            try:
+                if item.stat().st_mtime < cutoff:
+                    item.unlink(missing_ok=True)
+                    removed += 1
             except OSError:
                 pass
     return removed

@@ -19,6 +19,12 @@ Registro das decisões do projeto. O histórico completo de cada ferramenta ante
 
 ## Linha do tempo
 
+### [26/11/2026] - Desfoque de placa com rastreamento, corte e áudio em vídeos (Issue #1 / ID-011)
+- Adicionada na aba **Frames** a edição manual e offline de vídeo para o fluxo do Relíquias Itaboraí (`backend/app/frames/video_blur.py`, `video_routes.py` e `frontend/js/frames/video-blur.js`), documentada em [docs/designs/desfoque-placa-motion-track.md](docs/designs/desfoque-placa-motion-track.md).
+- **Rastreamento de movimento (motion track):** desenho de múltiplas máscaras (`pixelate`, `blur` ou `solid`) sobre a prévia em tempo exato (`GET /preview?exact=true`), acompanhamento bidirecional ou *"daqui pra frente"* usando OpenCV (`TM_CCOEFF_NORMED` com janela local, contexto `1.35x`, micro-escalas e subamostragem máxima de 30 fps), correção manual por arraste/alças e opção *"Ocultar daqui"* sem interpolação fantasma em lacunas ocultas.
+- **Corte, áudio e exportação MP4:** marcação de início e fim do trecho (`trim`), opção explícita de silenciar o áudio (`mute_audio`) ou preservar e re-encodar a faixa de áudio em AAC sincronizada ao corte (`AudioResampler` + `AudioFifo`), aplicação opcional do recorte/proporção (`4:5`, `contain_blur`) antes de codificar em H.264 (`yuv420p`, dimensões pares) com preservação do arquivo original.
+- **Proteções e testes:** trava de sessão ativa (`VideoSession.hold()`) para impedir expiração/evicção durante operações longas, validação estrita Pydantic (`extra="forbid"`), cabeçalho anti-CSRF, limpeza automática de temporários (`ms_exp_*.mp4`) e cobertura em `tests/test_video_blur.py` e `e2e/test_frames_e2e.py`.
+
 ### [16/11/2026] - Capturas da interface adicionadas ao README
 - Incluídas 4 capturas da interface web em `docs/screenshots/` (`media1.png` a `media4.png`) exibindo as abas Baixar, Frames, Histórico e Configurações com dados fictícios de demonstração no `README.md`.
 
